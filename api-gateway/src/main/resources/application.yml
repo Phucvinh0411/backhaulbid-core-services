@@ -1,0 +1,35 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: api-gateway
+
+  cloud:
+    gateway:
+      mvc:
+        routes:
+          - id: identity-service
+            uri: http://identity-service:8080
+            predicates:
+              - Path=/api/v1/auth/**, /api/v1/accounts/**, /api/v1/users/**
+          - id: fleet-service
+            uri: http://fleet-service:8080
+            predicates:
+              - Path=/api/v1/fleets/**, /api/v1/vehicles/**, /api/v1/drivers/**
+          - id: wallet-service
+            uri: http://wallet-service:8080
+            predicates:
+              - Path=/api/v1/wallets/**, /api/v1/transactions/**
+          - id: contract-service
+            uri: http://contract-service:8080
+            predicates:
+              - Path=/api/v1/contracts/**
+          - id: bidding-service
+            uri: http://bidding-service:3001
+            predicates:
+              - Path=/api/v1/bids/**, /bidding-socket/**
+
+eureka:
+  client:
+    enabled: false
