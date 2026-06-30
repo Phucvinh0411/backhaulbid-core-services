@@ -5,7 +5,7 @@
 # Usage: docker build --build-arg MODULE=identity-service -t backhaulbid-identity .
 
 # Stage 1: Build with Maven
-FROM maven:3.9-eclipse-temurin-17-alpine AS builder
+FROM maven:3.9-eclipse-temurin-21-alpine AS builder
 WORKDIR /app
 
 # Cache Maven dependencies
@@ -25,7 +25,7 @@ ARG MODULE=identity-service
 RUN mvn clean package -pl ${MODULE} -am -DskipTests -B --no-transfer-progress
 
 # Stage 2: Runtime
-FROM eclipse-temurin:17-jre-alpine AS runner
+FROM eclipse-temurin:21-jre-alpine AS runner
 WORKDIR /app
 
 RUN addgroup --system --gid 1001 spring
