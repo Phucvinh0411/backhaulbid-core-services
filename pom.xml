@@ -31,7 +31,6 @@
         <module>fleet-service</module>
         <module>wallet-service</module>
         <module>contract-service</module>
-        <module>api-gateway</module>
     </modules>
 
 </project>

@@ -14,7 +14,6 @@ COPY identity-service/pom.xml ./identity-service/
 COPY fleet-service/pom.xml ./fleet-service/
 COPY wallet-service/pom.xml ./wallet-service/
 COPY contract-service/pom.xml ./contract-service/
-COPY api-gateway/pom.xml ./api-gateway/
 
 RUN mvn dependency:go-offline -B --no-transfer-progress
 
