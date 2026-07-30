@@ -1,6 +1,6 @@
 package iuh.fit.se.config;
 
-import iuh.fit.se.security.JwtAuthenticationFilter;
+import iuh.fit.se.security.GatewayHeaderAuthenticationFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -20,7 +20,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final GatewayHeaderAuthenticationFilter gatewayHeaderAuthenticationFilter;
 
     @Bean
     public PasswordEncoder passwordEncoder() {
@@ -43,8 +43,8 @@ public class SecurityConfig {
                         // Các request khác yêu cầu xác thực
                         .anyRequest().authenticated()
                 )
-                // Thêm JwtAuthenticationFilter trước UsernamePasswordAuthenticationFilter
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+                // Thêm GatewayHeaderAuthenticationFilter trước UsernamePasswordAuthenticationFilter
+                .addFilterBefore(gatewayHeaderAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

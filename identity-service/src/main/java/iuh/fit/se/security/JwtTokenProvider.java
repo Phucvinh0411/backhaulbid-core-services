@@ -62,6 +62,17 @@ public class JwtTokenProvider {
         return refreshTokenRepository.save(refreshToken);
     }
 
+    public RefreshToken validateRefreshToken(String token) {
+        RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
+                .orElseThrow(() -> new RuntimeException("Refresh token không tồn tại!"));
+        
+        if (refreshToken.getExpiryDate().compareTo(Instant.now()) < 0) {
+            refreshTokenRepository.delete(refreshToken);
+            throw new RuntimeException("Refresh token đã hết hạn. Vui lòng đăng nhập lại!");
+        }
+        return refreshToken;
+    }
+
     // Lấy ID (subject) từ JWT
     public String getAccountIdFromJWT(String token) {
         Claims claims = Jwts.parserBuilder()
