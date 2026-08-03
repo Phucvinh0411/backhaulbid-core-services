@@ -1,0 +1,14 @@
+package iuh.fit.se.repository;
+
+import iuh.fit.se.domain.entity.Account;
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+import java.util.Optional;
+import java.util.UUID;
+
+@Repository
+public interface AccountRepository extends JpaRepository<Account, UUID> {
+    Optional<Account> findByPhone(String phone);
+    boolean existsByPhone(String phone);
+}
