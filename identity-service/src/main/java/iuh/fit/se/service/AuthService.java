@@ -6,6 +6,7 @@ import iuh.fit.se.domain.dto.response.AuthResponse;
 import iuh.fit.se.domain.entity.Account;
 import iuh.fit.se.domain.entity.RefreshToken;
 import iuh.fit.se.domain.enums.AccountStatus;
+import iuh.fit.se.mapper.AuthMapper;
 import iuh.fit.se.repository.AccountRepository;
 import iuh.fit.se.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ public class AuthService {
     private final AccountRepository accountRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+    private final AuthMapper authMapper;
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
@@ -40,12 +42,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.generateAccessToken(account);
         RefreshToken refreshToken = jwtTokenProvider.generateRefreshToken(account);
 
-        return AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
-                .phone(account.getPhone())
-                .role(account.getRole().name())
-                .build();
+        return authMapper.toResponse(account, accessToken, refreshToken.getToken());
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -63,12 +60,7 @@ public class AuthService {
         String accessToken = jwtTokenProvider.generateAccessToken(account);
         RefreshToken refreshToken = jwtTokenProvider.generateRefreshToken(account);
 
-        return AuthResponse.builder()
-                .accessToken(accessToken)
-                .refreshToken(refreshToken.getToken())
-                .phone(account.getPhone())
-                .role(account.getRole().name())
-                .build();
+        return authMapper.toResponse(account, accessToken, refreshToken.getToken());
     }
 
     public AuthResponse refresh(String token) {
@@ -76,11 +68,6 @@ public class AuthService {
         Account account = refreshToken.getAccount();
         
         String newAccessToken = jwtTokenProvider.generateAccessToken(account);
-        return AuthResponse.builder()
-                .accessToken(newAccessToken)
-                .refreshToken(refreshToken.getToken()) // Giữ nguyên refresh token cũ hoặc tạo mới tùy nghiệp vụ
-                .phone(account.getPhone())
-                .role(account.getRole().name())
-                .build();
+        return authMapper.toResponse(account, newAccessToken, refreshToken.getToken());
     }
 }

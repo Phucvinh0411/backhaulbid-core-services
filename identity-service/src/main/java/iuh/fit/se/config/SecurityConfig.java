@@ -24,7 +24,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(12);
     }
 
     @Bean
@@ -36,6 +36,9 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Phân quyền request
                 .authorizeHttpRequests(auth -> auth
+                        // Allow unauthenticated health checks from the container orchestrator.
+                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                        .requestMatchers("/v3/api-docs/**", "/swagger-ui.html", "/swagger-ui/**").permitAll()
                         // Cho phép truy cập public các API xác thực
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // Yêu cầu quyền CARRIER cho API companies

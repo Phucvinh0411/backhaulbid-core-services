@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: identity-service
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
   # ──────────────────────────────────────────
   # DataSource Configuration
@@ -40,3 +44,34 @@ spring:
     baseline-on-migrate: true
     baseline-version: 0
     validate-on-migrate: true
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka/}
+  instance:
+    prefer-ip-address: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+  business-verification:
+    upload-dir: ${BUSINESS_VERIFICATION_UPLOAD_DIR:./data/business-verifications}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:false}
+  swagger-ui:
+    enabled: ${SWAGGER_ENABLED:false}
+    path: /swagger-ui.html
+    disable-swagger-default-url: true
