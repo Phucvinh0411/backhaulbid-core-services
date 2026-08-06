@@ -47,7 +47,7 @@
         <module>fleet-service</module>
         <module>wallet-service</module>
         <module>contract-service</module>
-        <module>notification-service</module>
+        <!-- <module>notification-service</module> -->
     </modules>
 
 </project>
