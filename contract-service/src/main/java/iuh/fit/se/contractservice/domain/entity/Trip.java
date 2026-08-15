@@ -33,6 +33,12 @@ public class Trip {
     @Column(name = "vehicle_id", nullable = false)
     private UUID vehicleId;
 
+    @Column(name = "driver_id")
+    private UUID driverId;
+
+    @Column(name = "assignment_pin_hash", length = 64)
+    private String assignmentPinHash;
+
     @Column(name = "pickup_location", nullable = false, length = 500)
     private String pickupLocation;
 

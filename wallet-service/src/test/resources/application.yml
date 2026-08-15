@@ -4,11 +4,14 @@ spring:
     username: sa
     password:
     driver-class-name: org.h2.Driver
+
   jpa:
     hibernate:
       ddl-auto: create-drop
   flyway:
     enabled: false
+
+INTERNAL_WALLET_TOKEN: test-internal-wallet-token
 
 eureka:
   client:

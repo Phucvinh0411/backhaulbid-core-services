@@ -34,8 +34,11 @@ RUN adduser --system --uid 1001 spring
 ARG MODULE=identity-service
 COPY --from=builder --chown=spring:spring /app/${MODULE}/target/*.jar app.jar
 
-USER spring
+RUN mkdir -p /data/fleet-documents /data/business-verifications && chown -R spring:spring /data && chmod -R 777 /data
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

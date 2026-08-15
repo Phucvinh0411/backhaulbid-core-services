@@ -21,7 +21,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class JwtTokenProvider {
 
-    @Value("${app.jwt.secret:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}")
+    @Value("${app.jwt.secret}")
     private String jwtSecret;
 
     @Value("${app.jwt.access-expiration-ms:900000}") // 15 minutes = 900000 ms

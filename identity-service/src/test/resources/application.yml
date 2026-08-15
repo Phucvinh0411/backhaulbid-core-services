@@ -10,6 +10,10 @@ spring:
   flyway:
     enabled: false
 
+app:
+  jwt:
+    secret: VGhpcyBpcyBhIHRlc3Qgc2VjcmV0IGtleSBmb3IgdW5pdCB0ZXN0cw==
+
 eureka:
   client:
     enabled: false

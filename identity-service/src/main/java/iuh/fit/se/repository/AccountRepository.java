@@ -4,6 +4,7 @@ import iuh.fit.se.domain.entity.Account;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -11,4 +12,5 @@ import java.util.UUID;
 public interface AccountRepository extends JpaRepository<Account, UUID> {
     Optional<Account> findByPhone(String phone);
     boolean existsByPhone(String phone);
+    List<Account> findAllByOrderByCreatedAtDesc();
 }
