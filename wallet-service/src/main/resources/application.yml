@@ -6,12 +6,13 @@ spring:
     name: wallet-service
 
   # ──────────────────────────────────────────
-  # DataSource Configuration
+  # Docker Compose and CI must supply datasource settings for production-like runs.
+  # Tests override these values with the embedded H2 profile.
   # ──────────────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5432/backhaulbid_wallet
-    username: backhaulbid
-    password: backhaulbid_secret
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
@@ -20,7 +21,7 @@ spring:
       connection-timeout: 20000
 
   # ──────────────────────────────────────────
-  # JPA Configuration
+  # Hibernate validates the Flyway-managed schema instead of creating tables implicitly.
   # ──────────────────────────────────────────
   jpa:
     hibernate:
@@ -65,3 +66,15 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html
     disable-swagger-default-url: true
+
+# Provider settings are disabled by default so local Docker boots without
+# credentials. Enable the Sandbox only after supplying merchant credentials.
+sepay:
+  enabled: ${SEPAY_ENABLED:false}
+  merchant-id: ${SEPAY_MERCHANT_ID:}
+  secret-key: ${SEPAY_SECRET_KEY:}
+  ipn-secret: ${SEPAY_IPN_SECRET:${SEPAY_SECRET_KEY:}}
+  checkout-url: ${SEPAY_CHECKOUT_URL:https://pay-sandbox.sepay.vn/v1/checkout/init}
+  success-url: ${SEPAY_SUCCESS_URL:http://localhost:3002/carrier/wallet?payment=success}
+  error-url: ${SEPAY_ERROR_URL:http://localhost:3002/carrier/wallet?payment=error}
+  cancel-url: ${SEPAY_CANCEL_URL:http://localhost:3002/carrier/wallet?payment=cancel}

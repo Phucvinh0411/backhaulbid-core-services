@@ -43,6 +43,12 @@ public class DriverProfile {
     @Column(name = "rejection_reason", length = 500)
     private String rejectionReason;
 
+    @Column(name = "reviewed_by")
+    private UUID reviewedBy;
+
+    @Column(name = "reviewed_at")
+    private Instant reviewedAt;
+
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
@@ -59,10 +65,22 @@ public class DriverProfile {
     public void approve() {
         status = VerificationStatus.VERIFIED;
         rejectionReason = null;
+        reviewedAt = Instant.now();
     }
 
     public void reject(String reason) {
         status = VerificationStatus.REJECTED;
         rejectionReason = reason;
+        reviewedAt = Instant.now();
+    }
+
+    public void approveBy(UUID adminId) {
+        approve();
+        reviewedBy = adminId;
+    }
+
+    public void rejectBy(UUID adminId, String reason) {
+        reject(reason);
+        reviewedBy = adminId;
     }
 }

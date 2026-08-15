@@ -6,12 +6,12 @@ spring:
     name: contract-service
 
   # ──────────────────────────────────────────
-  # DataSource Configuration
+  # Docker and CI must supply datasource settings; required values prevent accidental database drift.
   # ──────────────────────────────────────────
   datasource:
-    url: jdbc:postgresql://localhost:5432/backhaulbid_contract
-    username: backhaulbid
-    password: backhaulbid_secret
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
     driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 10
