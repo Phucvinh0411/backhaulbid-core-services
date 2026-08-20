@@ -14,6 +14,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import iuh.fit.se.domain.dto.response.UserMeResponse;
+import java.util.UUID;
+
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -69,5 +72,34 @@ public class AuthService {
         
         String newAccessToken = jwtTokenProvider.generateAccessToken(account);
         return authMapper.toResponse(account, newAccessToken, refreshToken.getToken());
+    }
+
+    @Transactional(readOnly = true)
+    public UserMeResponse getMe(String identifier) {
+        Account account;
+        try {
+            UUID accountId = UUID.fromString(identifier);
+            account = accountRepository.findById(accountId)
+                    .orElseThrow(() -> new RuntimeException("Account not found: " + identifier));
+        } catch (IllegalArgumentException e) {
+            account = accountRepository.findByPhone(identifier)
+                    .orElseThrow(() -> new RuntimeException("Account not found: " + identifier));
+        }
+
+        String fullName = account.getUserProfile() != null ? account.getUserProfile().getFullName() : null;
+        String avatarUrl = account.getUserProfile() != null ? account.getUserProfile().getAvatarUrl() : null;
+        String address = account.getUserProfile() != null ? account.getUserProfile().getAddress() : null;
+        String companyName = account.getCompany() != null ? account.getCompany().getCompanyName() : null;
+
+        return UserMeResponse.builder()
+                .accountId(account.getId())
+                .phone(account.getPhone())
+                .email(account.getEmail())
+                .role(account.getRole() != null ? account.getRole().name() : null)
+                .fullName(fullName)
+                .avatarUrl(avatarUrl)
+                .address(address)
+                .companyName(companyName)
+                .build();
     }
 }

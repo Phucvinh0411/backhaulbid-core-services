@@ -11,12 +11,32 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import iuh.fit.se.domain.dto.response.UserMeResponse;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 @RestController
 @RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 public class AuthController {
 
     private final AuthService authService;
+
+    @GetMapping("/me")
+    public ResponseEntity<UserMeResponse> me(HttpServletRequest request) {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        String identifier = null;
+        if (authentication != null && authentication.getName() != null && !"anonymousUser".equals(authentication.getName())) {
+            identifier = authentication.getName();
+        } else if (request.getHeader("X-User-Id") != null) {
+            identifier = request.getHeader("X-User-Id");
+        }
+
+        if (identifier == null) {
+            return ResponseEntity.status(401).build();
+        }
+        return ResponseEntity.ok(authService.getMe(identifier));
+    }
 
     @PostMapping("/register")
     public ResponseEntity<AuthResponse> register(@RequestBody RegisterRequest request) {
