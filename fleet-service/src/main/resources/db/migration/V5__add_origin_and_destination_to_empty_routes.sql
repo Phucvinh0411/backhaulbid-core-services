@@ -1,0 +1,3 @@
+ALTER TABLE empty_routes
+ADD COLUMN origin VARCHAR(255),
+ADD COLUMN destination VARCHAR(255);
