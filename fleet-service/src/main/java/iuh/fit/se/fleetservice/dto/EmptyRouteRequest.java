@@ -31,4 +31,8 @@ public class EmptyRouteRequest {
 
     @NotNull(message = "Kinh độ không được để trống")
     private Double longitude;
+
+    private String origin;
+
+    private String destination;
 }

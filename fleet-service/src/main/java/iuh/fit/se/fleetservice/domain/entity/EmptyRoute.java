@@ -35,6 +35,12 @@ public class EmptyRoute {
     @Column(name = "longitude", nullable = false)
     private Double longitude;
 
+    @Column(name = "origin")
+    private String origin;
+
+    @Column(name = "destination")
+    private String destination;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
     private EmptyRouteStatus status;

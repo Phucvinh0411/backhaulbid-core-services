@@ -1,0 +1,1 @@
+ALTER TABLE trips ALTER COLUMN driver_id TYPE UUID USING driver_id::UUID;

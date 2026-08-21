@@ -47,7 +47,7 @@
         <module>fleet-service</module>
         <module>wallet-service</module>
         <module>contract-service</module>
-        <!-- <module>notification-service</module> -->
+        <!-- notification-service is now NestJS, lives in backhaulbid-bidding-service repo -->
     </modules>
 
 </project>

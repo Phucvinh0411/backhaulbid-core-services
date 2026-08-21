@@ -11,4 +11,6 @@ import java.util.UUID;
 @Repository
 public interface EmptyRouteRepository extends JpaRepository<EmptyRoute, UUID> {
     List<EmptyRoute> findByStatus(EmptyRouteStatus status);
+    
+    List<EmptyRoute> findByOriginContainingIgnoreCaseAndDestinationContainingIgnoreCaseAndStatus(String origin, String destination, EmptyRouteStatus status);
 }
