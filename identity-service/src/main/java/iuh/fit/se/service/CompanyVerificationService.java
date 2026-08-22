@@ -20,7 +20,6 @@ import org.springframework.http.MediaType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.text.Normalizer;
 import java.util.Optional;
@@ -33,7 +32,6 @@ public class CompanyVerificationService {
     private final AccountRepository accountRepository;
     private final CompanyRepository companyRepository;
     private final BusinessVerificationService businessVerificationService;
-    private final BusinessLicenseStorage businessLicenseStorage;
     private final BusinessVerificationMapper businessVerificationMapper;
     private final EkycVerificationRepository ekycVerificationRepository;
 
@@ -42,8 +40,8 @@ public class CompanyVerificationService {
             String accountId,
             String taxCode,
             String ekycRepresentativeName,
-            MultipartFile businessLicense,
-            MultipartFile authorizationLetter) {
+            String businessLicenseUrl,
+            String authorizationLetterUrl) {
         UUID parsedAccountId = UUID.fromString(accountId);
         Account account = accountRepository.findById(parsedAccountId)
                 .orElseThrow(() -> new IllegalArgumentException("Tài khoản không tồn tại"));
@@ -75,7 +73,7 @@ public class CompanyVerificationService {
                 normalizedEkycRepresentativeName, lookup.getRepresentative());
         boolean requiresAuthorization = !representativeMatched;
         if (requiresAuthorization
-                && (authorizationLetter == null || authorizationLetter.isEmpty())) {
+                && (authorizationLetterUrl == null || authorizationLetterUrl.trim().isEmpty())) {
             throw new IllegalArgumentException(
                     "Người đại diện doanh nghiệp không trùng eKYC. Vui lòng nộp giấy ủy quyền");
         }
@@ -93,12 +91,6 @@ public class CompanyVerificationService {
                                     : "Doanh nghiệp đã được xác minh");
                 });
 
-        BusinessLicenseStorage.StoredBusinessLicense storedLicense =
-                businessLicenseStorage.store(businessLicense);
-        BusinessLicenseStorage.StoredBusinessLicense storedAuthorizationLetter =
-                requiresAuthorization
-                        ? businessLicenseStorage.store(authorizationLetter)
-                        : null;
         Company company = existingCompany
                 .orElseGet(() -> Company.builder().account(account).build());
         company.setTaxCode(normalizedTaxCode);
@@ -110,16 +102,10 @@ public class CompanyVerificationService {
                 normalizedEkycRepresentativeName, 255));
         company.setRepresentativeMatched(representativeMatched);
         company.setRequiresAuthorization(requiresAuthorization);
-        company.setBusinessLicenseUrl(storedLicense.storedFilename());
-        company.setBusinessLicenseFilename(storedLicense.originalFilename());
-        company.setAuthorizationLetterUrl(
-                storedAuthorizationLetter == null
-                        ? null
-                        : storedAuthorizationLetter.storedFilename());
-        company.setAuthorizationLetterFilename(
-                storedAuthorizationLetter == null
-                        ? null
-                        : storedAuthorizationLetter.originalFilename());
+        company.setBusinessLicenseUrl(businessLicenseUrl);
+        company.setBusinessLicenseFilename(null);
+        company.setAuthorizationLetterUrl(authorizationLetterUrl);
+        company.setAuthorizationLetterFilename(null);
         company.setVerificationStatus(VerificationStatus.PENDING);
         company.setCompanyStatus(CompanyStatus.ACTIVE);
         company.setRejectionReason(null);
@@ -191,48 +177,7 @@ public class CompanyVerificationService {
         return businessVerificationMapper.toResponse(companyRepository.save(company));
     }
 
-    @Transactional(readOnly = true)
-    public BusinessDocumentDownload getDocument(
-            UUID verificationId,
-            String documentType) {
-        Company company = companyRepository.findById(verificationId)
-                .orElseThrow(() -> new IllegalArgumentException(
-                        "Không tìm thấy hồ sơ doanh nghiệp"));
-        boolean authorizationLetter =
-                "authorizationLetter".equals(documentType);
-        String storedFilename = authorizationLetter
-                ? company.getAuthorizationLetterUrl()
-                : company.getBusinessLicenseUrl();
-        if (storedFilename == null) {
-            throw new IllegalArgumentException(
-                    authorizationLetter
-                            ? "Hồ sơ chưa có giấy ủy quyền người đại diện"
-                            : "Hồ sơ chưa có giấy phép đăng ký kinh doanh");
-        }
-        MediaType mediaType = storedFilename.endsWith(".pdf")
-                ? MediaType.APPLICATION_PDF
-                : storedFilename.endsWith(".png")
-                ? MediaType.IMAGE_PNG
-                : MediaType.IMAGE_JPEG;
-        String originalFilename = authorizationLetter
-                ? firstNonBlank(
-                        company.getAuthorizationLetterFilename(),
-                        "giay-uy-quyen")
-                : firstNonBlank(
-                        company.getBusinessLicenseFilename(),
-                        "giay-phep-doanh-nghiep");
-        return new BusinessDocumentDownload(
-                businessLicenseStorage.load(storedFilename),
-                originalFilename,
-                mediaType
-        );
-    }
 
-    public record BusinessDocumentDownload(
-            Resource resource,
-            String filename,
-            MediaType mediaType) {
-    }
 
     private String limitLength(String value, int maximumLength) {
         if (value == null || value.length() <= maximumLength) {

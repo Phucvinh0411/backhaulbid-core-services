@@ -27,7 +27,7 @@ VALUES
         'SUCCESS',
         'BANK_TRANSFER',
         'INIT-SHIPPER-001',
-        'Nạp tiền khởi tạo tài khoản Chủ hàng Demo'
+        'Nap tien khoi tao tai khoan Chu hang Demo'
     ),
     (
         '55555555-5555-5555-5555-555555555555',
@@ -36,5 +36,5 @@ VALUES
         'SUCCESS',
         'BANK_TRANSFER',
         'INIT-CARRIER-001',
-        'Nạp tiền khởi tạo tài khoản Nhà xe Demo'
+        'Nap tien khoi tao tai khoan Nha xe Demo'
     );

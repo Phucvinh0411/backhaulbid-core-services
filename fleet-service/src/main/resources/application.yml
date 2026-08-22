@@ -48,10 +48,6 @@ eureka:
   instance:
     prefer-ip-address: true
 
-app:
-  fleet:
-    upload-dir: ${FLEET_UPLOAD_DIR:./data/fleet-documents}
-
 management:
   endpoints:
     web:

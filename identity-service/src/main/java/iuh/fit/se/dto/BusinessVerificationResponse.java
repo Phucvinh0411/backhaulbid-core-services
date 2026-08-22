@@ -25,6 +25,8 @@ public class BusinessVerificationResponse {
     private Boolean representativeMatched;
     private Boolean requiresAuthorization;
     private String status;
+    private String businessLicenseUrl;
+    private String authorizationLetterUrl;
     private String businessLicenseFilename;
     private String authorizationLetterFilename;
     private String rejectionReason;

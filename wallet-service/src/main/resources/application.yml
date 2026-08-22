@@ -75,6 +75,6 @@ sepay:
   secret-key: ${SEPAY_SECRET_KEY:}
   ipn-secret: ${SEPAY_IPN_SECRET:${SEPAY_SECRET_KEY:}}
   checkout-url: ${SEPAY_CHECKOUT_URL:https://pay-sandbox.sepay.vn/v1/checkout/init}
-  success-url: ${SEPAY_SUCCESS_URL:http://localhost:3002/carrier/wallet?payment=success}
-  error-url: ${SEPAY_ERROR_URL:http://localhost:3002/carrier/wallet?payment=error}
-  cancel-url: ${SEPAY_CANCEL_URL:http://localhost:3002/carrier/wallet?payment=cancel}
+  success-url: ${SEPAY_SUCCESS_URL:http://localhost:3000/?payment=success}
+  error-url: ${SEPAY_ERROR_URL:http://localhost:3000/?payment=error}
+  cancel-url: ${SEPAY_CANCEL_URL:http://localhost:3000/?payment=cancel}
