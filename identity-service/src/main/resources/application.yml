@@ -55,8 +55,6 @@ eureka:
 app:
   jwt:
     secret: ${JWT_SECRET}
-  business-verification:
-    upload-dir: ${BUSINESS_VERIFICATION_UPLOAD_DIR:./data/business-verifications}
 
 management:
   endpoints:

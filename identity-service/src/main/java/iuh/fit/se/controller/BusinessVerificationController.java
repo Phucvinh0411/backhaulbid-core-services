@@ -6,6 +6,7 @@ import iuh.fit.se.dto.BusinessLookupResponse;
 import iuh.fit.se.dto.BusinessVerificationResponse;
 import iuh.fit.se.dto.BusinessVerificationReviewRequest;
 import iuh.fit.se.dto.BusinessVerificationPageResponse;
+import iuh.fit.se.dto.CarrierPublicProfileResponse;
 import iuh.fit.se.mapper.BusinessVerificationMapper;
 import iuh.fit.se.service.BusinessVerificationService;
 import iuh.fit.se.service.CompanyVerificationService;
@@ -28,7 +29,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.util.UUID;
 import java.nio.charset.StandardCharsets;
@@ -43,6 +43,7 @@ public class BusinessVerificationController {
     private final BusinessVerificationService businessVerificationService;
     private final CompanyVerificationService companyVerificationService;
     private final BusinessVerificationMapper businessVerificationMapper;
+    private final iuh.fit.se.service.CarrierPublicProfileService carrierPublicProfileService;
 
     @GetMapping("/lookup/{taxCode}")
     @PreAuthorize("hasAnyRole('SHIPPER', 'CARRIER')")
@@ -62,14 +63,14 @@ public class BusinessVerificationController {
                     message = "Tax code must contain 10 or 13 digits")
             String taxCode,
             @RequestParam(required = false) String ekycRepresentativeName,
-            @RequestParam MultipartFile businessLicense,
-            @RequestParam(required = false) MultipartFile authorizationLetter) {
+            @RequestParam String businessLicenseUrl,
+            @RequestParam(required = false) String authorizationLetterUrl) {
         return ResponseEntity.ok(companyVerificationService.submit(
                 authentication.getName(),
                 taxCode,
                 ekycRepresentativeName,
-                businessLicense,
-                authorizationLetter));
+                businessLicenseUrl,
+                authorizationLetterUrl));
     }
 
     @GetMapping("/me")
@@ -80,6 +81,13 @@ public class BusinessVerificationController {
                 companyVerificationService.findCurrent(authentication.getName())
                         .orElseGet(businessVerificationMapper::notSubmitted)
         );
+    }
+
+    @GetMapping("/public/{accountId}")
+    @PreAuthorize("hasAnyRole('SHIPPER', 'CARRIER')")
+    public ResponseEntity<CarrierPublicProfileResponse> publicCarrierProfile(
+            @PathVariable UUID accountId) {
+        return ResponseEntity.ok(carrierPublicProfileService.get(accountId));
     }
 
     @GetMapping
@@ -101,23 +109,4 @@ public class BusinessVerificationController {
                 id, request.decision(), request.rejectionReason()));
     }
 
-    @GetMapping("/{id}/document")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<org.springframework.core.io.Resource> document(
-            @PathVariable UUID id,
-            @RequestParam(defaultValue = "businessLicense") String type) {
-        CompanyVerificationService.BusinessDocumentDownload document =
-                companyVerificationService.getDocument(id, type);
-        return ResponseEntity.ok()
-                .contentType(document.mediaType())
-                .header(
-                        HttpHeaders.CONTENT_DISPOSITION,
-                        ContentDisposition.attachment()
-                                .filename(
-                                        document.filename(),
-                                        StandardCharsets.UTF_8)
-                                .build()
-                                .toString())
-                .body(document.resource());
-    }
 }

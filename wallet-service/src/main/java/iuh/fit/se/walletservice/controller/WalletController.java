@@ -1,110 +1,54 @@
 package iuh.fit.se.walletservice.controller;
 
-import iuh.fit.se.walletservice.domain.entity.Wallet;
-import iuh.fit.se.walletservice.repository.WalletRepository;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-import lombok.RequiredArgsConstructor;
+import iuh.fit.se.walletservice.dto.response.WalletResponse;
+import iuh.fit.se.walletservice.dto.response.WalletTransactionPageResponse;
+import iuh.fit.se.walletservice.dto.response.WalletTransactionResponse;
+import iuh.fit.se.walletservice.service.WalletQueryService;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.server.ResponseStatusException;
 import java.util.UUID;
-import java.util.Map;
-import java.util.Optional;
 
 @RestController
 @RequestMapping("/api/v1/wallets")
-@RequiredArgsConstructor
 public class WalletController {
 
-    private final WalletRepository walletRepository;
+    private final WalletQueryService walletQueryService;
+
+    public WalletController(WalletQueryService walletQueryService) {
+        this.walletQueryService = walletQueryService;
+    }
 
     @GetMapping("/me")
-    public ResponseEntity<?> getMyWallet(@RequestHeader("x-user-id") String userId) {
-        try {
-            Optional<Wallet> walletOpt = walletRepository.findByAccountId(UUID.fromString(userId));
-            if (walletOpt.isEmpty()) {
-                return ResponseEntity.status(404).body(Map.of("message", "Wallet not found"));
-            }
-            Wallet w = walletOpt.get();
-            return ResponseEntity.ok(Map.of(
-                "id", w.getId(),
-                "accountId", w.getAccountId(),
-                "balance", w.getBalance(),
-                "availableBalance", w.getBalance(),
-                "frozenBalance", w.getFrozenBalance(),
-                "createdAt", w.getCreatedAt(),
-                "updatedAt", w.getUpdatedAt()
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", e.getMessage()));
-        }
+    public WalletResponse getMyWallet(@RequestHeader(value = "X-User-Id", required = false) String userId) {
+        return walletQueryService.getWallet(accountId(userId));
     }
 
     @GetMapping("/me/transactions")
-    public ResponseEntity<?> getMyTransactions(@RequestHeader("x-user-id") String userId) {
-        try {
-            Optional<Wallet> walletOpt = walletRepository.findByAccountId(UUID.fromString(userId));
-            if (walletOpt.isEmpty()) {
-                return ResponseEntity.status(404).body(Map.of("message", "Wallet not found"));
-            }
-            
-            Wallet wallet = walletOpt.get();
-            var txs = wallet.getTransactions().stream().map(t -> Map.of(
-                "id", t.getId(),
-                "amount", t.getAmount(),
-                "type", t.getType(),
-                "status", t.getStatus(),
-                "paymentMethod", t.getPaymentMethod() != null ? t.getPaymentMethod() : "SYSTEM",
-                "description", t.getDescription() != null ? t.getDescription() : "",
-                "createdAt", t.getCreatedAt()
-            )).toList();
-
-            return ResponseEntity.ok(Map.of(
-                "data", txs,
-                "total", txs.size()
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", e.getMessage()));
-        }
+    public WalletTransactionPageResponse getMyTransactions(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize) {
+        return walletQueryService.getTransactions(accountId(userId), page, pageSize);
     }
 
-    @GetMapping("/me/withdrawals")
-    public ResponseEntity<?> getMyWithdrawals(@RequestHeader("x-user-id") String userId) {
-        try {
-            Optional<Wallet> walletOpt = walletRepository.findByAccountId(UUID.fromString(userId));
-            if (walletOpt.isEmpty()) {
-                return ResponseEntity.status(404).body(Map.of("message", "Wallet not found"));
-            }
-            Wallet wallet = walletOpt.get();
-            var withdrawals = wallet.getTransactions().stream()
-                .filter(t -> t.getType().name().equals("WITHDRAW"))
-                .map(t -> Map.of(
-                    "id", t.getId(),
-                    "amount", t.getAmount(),
-                    "status", t.getStatus(),
-                    "createdAt", t.getCreatedAt(),
-                    "bankName", "MOCK_BANK",
-                    "accountNumber", "MOCK_ACCOUNT"
-                )).toList();
-            return ResponseEntity.ok(Map.of(
-                "data", withdrawals,
-                "total", withdrawals.size(),
-                "page", 1,
-                "pageSize", 20
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", e.getMessage()));
-        }
+    @GetMapping("/me/transactions/{transactionId}")
+    public WalletTransactionResponse getMyTransaction(
+            @RequestHeader(value = "X-User-Id", required = false) String userId,
+            @PathVariable UUID transactionId) {
+        return walletQueryService.getTransaction(accountId(userId), transactionId);
     }
 
-    @PostMapping("/me/withdrawals")
-    public ResponseEntity<?> createWithdrawal(@RequestHeader("x-user-id") String userId, @RequestBody Map<String, Object> payload) {
+    private UUID accountId(String userId) {
         try {
-            // Mock withdrawal response to prevent frontend errors
-            return ResponseEntity.ok(Map.of(
-                "message", "Yêu cầu rút tiền đang được xử lý",
-                "status", "PENDING"
-            ));
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body(Map.of("message", e.getMessage()));
+            return UUID.fromString(userId);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authenticated account is required");
         }
     }
 }
