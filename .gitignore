@@ -58,3 +58,14 @@ logs/
 # Crash reports
 hs_err_pid*
 replay_pid*
+
+# --- AI & Agent Artifacts ---
+.agents/
+.claude/
+.gitnexus/
+.impeccable/
+artifacts/
+AGENTS.md
+CLAUDE.md
+GEMINI*.md
+*REPORT*.md

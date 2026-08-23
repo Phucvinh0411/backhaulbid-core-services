@@ -6,6 +6,7 @@ import iuh.fit.se.dto.BusinessLookupResponse;
 import iuh.fit.se.dto.BusinessVerificationResponse;
 import iuh.fit.se.dto.BusinessVerificationReviewRequest;
 import iuh.fit.se.dto.BusinessVerificationPageResponse;
+import iuh.fit.se.dto.CarrierPublicProfileResponse;
 import iuh.fit.se.mapper.BusinessVerificationMapper;
 import iuh.fit.se.service.BusinessVerificationService;
 import iuh.fit.se.service.CompanyVerificationService;
@@ -42,6 +43,7 @@ public class BusinessVerificationController {
     private final BusinessVerificationService businessVerificationService;
     private final CompanyVerificationService companyVerificationService;
     private final BusinessVerificationMapper businessVerificationMapper;
+    private final iuh.fit.se.service.CarrierPublicProfileService carrierPublicProfileService;
 
     @GetMapping("/lookup/{taxCode}")
     @PreAuthorize("hasAnyRole('SHIPPER', 'CARRIER')")
@@ -79,6 +81,13 @@ public class BusinessVerificationController {
                 companyVerificationService.findCurrent(authentication.getName())
                         .orElseGet(businessVerificationMapper::notSubmitted)
         );
+    }
+
+    @GetMapping("/public/{accountId}")
+    @PreAuthorize("hasAnyRole('SHIPPER', 'CARRIER')")
+    public ResponseEntity<CarrierPublicProfileResponse> publicCarrierProfile(
+            @PathVariable UUID accountId) {
+        return ResponseEntity.ok(carrierPublicProfileService.get(accountId));
     }
 
     @GetMapping

@@ -21,12 +21,12 @@ public class EmptyRouteService {
      * Chủ nhà xe đăng ký tuyến chạy rỗng
      */
     @Transactional
-    public EmptyRoute createEmptyRoute(EmptyRouteRequest request) {
+    public EmptyRoute createEmptyRoute(EmptyRouteRequest request, String ownerCompanyId) {
         log.info("Đăng ký tuyến chạy rỗng mới cho xe: {}", request.getTruckId());
         
         EmptyRoute emptyRoute = EmptyRoute.builder()
                 .truckId(request.getTruckId())
-                .companyId(request.getCompanyId())
+                .companyId(ownerCompanyId)
                 .expectedEmptyTime(request.getExpectedEmptyTime())
                 .latitude(request.getLatitude())
                 .longitude(request.getLongitude())
@@ -36,6 +36,11 @@ public class EmptyRouteService {
                 .build();
                 
         return emptyRouteRepository.save(emptyRoute);
+    }
+
+    @Transactional(readOnly = true)
+    public java.util.List<EmptyRoute> listMine(String ownerCompanyId) {
+        return emptyRouteRepository.findByCompanyIdOrderByExpectedEmptyTimeAsc(ownerCompanyId);
     }
 
     @Transactional(readOnly = true)

@@ -17,6 +17,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     Page<Transaction> findByWalletAccountId(UUID accountId, Pageable pageable);
 
+    Optional<Transaction> findByIdAndWalletAccountId(UUID id, UUID accountId);
+
     @Query("select coalesce(sum(t.amount), 0) from Transaction t where t.status = :status and t.type = :type")
     BigDecimal sumByStatusAndType(TransactionStatus status, TransactionType type);
 
