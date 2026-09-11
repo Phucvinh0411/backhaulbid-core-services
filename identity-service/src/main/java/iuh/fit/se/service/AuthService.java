@@ -15,6 +15,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import iuh.fit.se.domain.dto.response.UserMeResponse;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import java.util.UUID;
 
 @Service
@@ -29,7 +31,7 @@ public class AuthService {
     @Transactional
     public AuthResponse register(RegisterRequest request) {
         if (accountRepository.existsByPhone(request.getPhone())) {
-            throw new RuntimeException("Phone number already exists");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number already exists");
         }
 
         Account account = Account.builder()
@@ -50,14 +52,14 @@ public class AuthService {
 
     public AuthResponse login(LoginRequest request) {
         Account account = accountRepository.findByPhone(request.getPhone())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
 
         if (!passwordEncoder.matches(request.getPassword(), account.getPasswordHash())) {
-            throw new RuntimeException("Invalid password");
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid password");
         }
 
         if (account.getStatus() != AccountStatus.ACTIVE) {
-            throw new RuntimeException("Account is not active");
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Account is not active");
         }
 
         String accessToken = jwtTokenProvider.generateAccessToken(account);
@@ -80,10 +82,10 @@ public class AuthService {
         try {
             UUID accountId = UUID.fromString(identifier);
             account = accountRepository.findById(accountId)
-                    .orElseThrow(() -> new RuntimeException("Account not found: " + identifier));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account not found: " + identifier));
         } catch (IllegalArgumentException e) {
             account = accountRepository.findByPhone(identifier)
-                    .orElseThrow(() -> new RuntimeException("Account not found: " + identifier));
+                    .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Account not found: " + identifier));
         }
 
         String fullName = account.getUserProfile() != null ? account.getUserProfile().getFullName() : null;

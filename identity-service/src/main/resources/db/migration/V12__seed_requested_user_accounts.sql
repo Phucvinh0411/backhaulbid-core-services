@@ -1,9 +1,9 @@
--- Seed requested Shipper (1234567890) and Carrier (1234567899) accounts with UTF-8 Vietnamese text
+-- V12: Seed requested Shipper (1234567890) and Carrier (1234567899) accounts with UUID 55555555-5555-5555-5555-555555555555 matching fleet-service and wallet-service
 
-DELETE FROM ekyc_verifications WHERE account_id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555');
-DELETE FROM companies WHERE account_id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555');
-DELETE FROM user_profiles WHERE account_id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555');
-DELETE FROM accounts WHERE id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555');
+DELETE FROM ekyc_verifications WHERE account_id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555') OR account_id IN (SELECT id FROM accounts WHERE phone IN ('1234567890', '1234567899'));
+DELETE FROM companies WHERE account_id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555') OR account_id IN (SELECT id FROM accounts WHERE phone IN ('1234567890', '1234567899'));
+DELETE FROM user_profiles WHERE account_id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555') OR account_id IN (SELECT id FROM accounts WHERE phone IN ('1234567890', '1234567899'));
+DELETE FROM accounts WHERE id IN ('44444444-4444-4444-4444-444444444444', '55555555-5555-5555-5555-555555555555') OR phone IN ('1234567890', '1234567899');
 
 INSERT INTO accounts (id, phone, email, password_hash, role, status)
 VALUES
@@ -11,7 +11,7 @@ VALUES
         '44444444-4444-4444-4444-444444444444',
         '1234567890',
         'shipper123@backhaulbid.local',
-        '$2a$10$aNYIyREfysTSk6icZRoKueuG69mGIMRsnZFsxv8mZ39Sv6AMmdWk2',
+        '$2a$12$zBxmHOxpXAVC/tdkwke26ezy2N.nVg88xckEp66xcADNqOTQgTayG',
         'SHIPPER',
         'ACTIVE'
     ),
@@ -19,7 +19,7 @@ VALUES
         '55555555-5555-5555-5555-555555555555',
         '1234567899',
         'carrier123@backhaulbid.local',
-        '$2a$10$aNYIyREfysTSk6icZRoKueuG69mGIMRsnZFsxv8mZ39Sv6AMmdWk2',
+        '$2a$12$zBxmHOxpXAVC/tdkwke26ezy2N.nVg88xckEp66xcADNqOTQgTayG',
         'CARRIER',
         'ACTIVE'
     );

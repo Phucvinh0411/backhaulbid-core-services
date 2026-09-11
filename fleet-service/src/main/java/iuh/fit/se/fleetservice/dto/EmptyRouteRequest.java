@@ -19,7 +19,6 @@ public class EmptyRouteRequest {
     @NotBlank(message = "Mã xe không được để trống")
     private String truckId;
 
-    @NotBlank(message = "Mã công ty không được để trống")
     private String companyId;
 
     @NotNull(message = "Thời gian dự kiến xe rỗng không được để trống")
