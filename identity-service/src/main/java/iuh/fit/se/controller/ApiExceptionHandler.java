@@ -8,8 +8,18 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 import java.util.Map;
 
+import org.springframework.web.server.ResponseStatusException;
+
 @RestControllerAdvice
 public class ApiExceptionHandler {
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<Map<String, String>> handleResponseStatus(
+            ResponseStatusException exception) {
+        String message = exception.getReason() != null ? exception.getReason() : exception.getMessage();
+        return ResponseEntity.status(exception.getStatusCode())
+                .body(Map.of("message", message));
+    }
 
     @ExceptionHandler(ConstraintViolationException.class)
     public ResponseEntity<Map<String, String>> handleConstraintViolation(
