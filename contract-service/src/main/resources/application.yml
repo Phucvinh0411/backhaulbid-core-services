@@ -41,6 +41,16 @@ spring:
     baseline-version: 0
     validate-on-migrate: false
 
+  # ──────────────────────────────────────────
+  # RabbitMQ Configuration
+  # ──────────────────────────────────────────
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USERNAME:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+    virtual-host: /
+
 eureka:
   client:
     service-url:

@@ -38,7 +38,7 @@ COPY --from=builder --chown=spring:spring /app/${MODULE}/target/*.jar app.jar
 RUN mkdir -p /data/fleet-documents /data/business-verifications && chown -R spring:spring /data && chmod -R 777 /data
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 8080
 
