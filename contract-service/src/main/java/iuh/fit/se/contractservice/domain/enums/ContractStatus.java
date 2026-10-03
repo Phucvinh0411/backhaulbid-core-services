@@ -4,5 +4,6 @@ public enum ContractStatus {
     DRAFT,
     WAITING_SIGNATURE,
     SIGNED,
-    CANCELLED
+    CANCELLED,
+    EXPIRED
 }

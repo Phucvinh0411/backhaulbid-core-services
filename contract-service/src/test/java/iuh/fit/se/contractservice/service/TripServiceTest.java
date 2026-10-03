@@ -17,6 +17,7 @@ import iuh.fit.se.contractservice.repository.TrackingLogRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
 import iuh.fit.se.contractservice.repository.DeliveryProofRepository;
 import iuh.fit.se.contractservice.repository.TripLocationUpdateRepository;
+import iuh.fit.se.contractservice.repository.TripDelaySettlementRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -49,13 +50,20 @@ class TripServiceTest {
     @Mock
     private TripLocationUpdateRepository tripLocationUpdateRepository;
 
+    @Mock
+    private TripDelaySettlementRepository tripDelaySettlementRepository;
+
+    @Mock
+    private LateDeliveryService lateDeliveryService;
+
     private TripService tripService;
     private Trip trip;
     private UUID carrierId;
 
     @BeforeEach
     void setUp() {
-        tripService = new TripService(tripRepository, trackingLogRepository, journeyEventRepository, deliveryProofRepository, tripLocationUpdateRepository);
+        tripService = new TripService(tripRepository, trackingLogRepository, journeyEventRepository,
+                deliveryProofRepository, tripLocationUpdateRepository, tripDelaySettlementRepository, lateDeliveryService);
         carrierId = UUID.randomUUID();
         trip = Trip.builder()
                 .id(UUID.randomUUID())

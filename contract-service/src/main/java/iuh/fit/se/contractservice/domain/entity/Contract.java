@@ -49,6 +49,9 @@ public class Contract {
     @Column(nullable = false, length = 30)
     private ContractStatus status;
 
+    @Column(name = "signing_deadline_at")
+    private Instant signingDeadlineAt;
+
     @Builder.Default
     @OneToMany(mappedBy = "contract", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ContractSignature> signatures = new ArrayList<>();
