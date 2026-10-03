@@ -129,9 +129,8 @@ class EmptyRouteServiceTest {
             .status(EmptyRouteStatus.PENDING)
             .build();
 
-        when(emptyRouteRepository.findByOriginContainingIgnoreCaseAndDestinationContainingIgnoreCaseAndStatus(
-            "TP. Hồ Chí Minh", "Hà Nội", EmptyRouteStatus.PENDING
-        )).thenReturn(List.of(suitable, lowPayload));
+        when(emptyRouteRepository.findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING))
+            .thenReturn(List.of(suitable, lowPayload));
 
         when(vehicleRepository.findByLicensePlateIgnoreCase("51H-11111")).thenReturn(Optional.of(
             Vehicle.builder()
@@ -181,9 +180,8 @@ class EmptyRouteServiceTest {
             .status(EmptyRouteStatus.PENDING)
             .build();
 
-        when(emptyRouteRepository.findByOriginContainingIgnoreCaseAndDestinationContainingIgnoreCaseAndStatus(
-            "Hà Nội", "Hải Phòng", EmptyRouteStatus.PENDING
-        )).thenReturn(List.of(route));
+        when(emptyRouteRepository.findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING))
+            .thenReturn(List.of(route));
 
         when(vehicleRepository.findByLicensePlateIgnoreCase("51H-33333")).thenReturn(Optional.of(
             Vehicle.builder()
@@ -218,9 +216,8 @@ class EmptyRouteServiceTest {
             .status(EmptyRouteStatus.PENDING)
             .build();
 
-        when(emptyRouteRepository.findByOriginContainingIgnoreCaseAndDestinationContainingIgnoreCaseAndStatus(
-            "Đà Nẵng", "Huế", EmptyRouteStatus.PENDING
-        )).thenReturn(List.of(expired));
+        when(emptyRouteRepository.findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING))
+            .thenReturn(List.of(expired));
 
         when(vehicleRepository.findByLicensePlateIgnoreCase("51H-44444")).thenReturn(Optional.of(
             Vehicle.builder()
