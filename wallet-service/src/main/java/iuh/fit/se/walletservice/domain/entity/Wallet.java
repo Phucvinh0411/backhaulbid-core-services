@@ -67,7 +67,9 @@ public class Wallet {
     public Transaction freeze(BigDecimal amount) {
         requireAvailable(amount);
         frozenBalance = currentFrozenBalance().add(amount);
-        return record(amount, TransactionType.FREEZE);
+        Transaction hold = record(amount, TransactionType.FREEZE);
+        hold.setRemainingHoldAmount(amount);
+        return hold;
     }
 
     public Transaction unfreeze(BigDecimal amount) {
@@ -87,6 +89,34 @@ public class Wallet {
         balance = currentBalance().subtract(amount);
         receiver.balance = receiver.currentBalance().add(amount);
         return record(amount, TransactionType.TRANSFER);
+    }
+
+    public List<Transaction> transferFromHold(Wallet receiver, Transaction hold, BigDecimal amount) {
+        if (receiver == null || receiver == this || hold == null || hold.getWallet() != this) {
+            throw new IllegalArgumentException("A valid hold and a different receiver are required");
+        }
+        requirePositive(amount);
+        BigDecimal remaining = hold.getRemainingHoldAmount();
+        if (remaining == null) {
+            if (currentFrozenBalance().compareTo(hold.getAmount()) < 0
+                    || currentBalance().compareTo(hold.getAmount()) < 0) {
+                throw new IllegalStateException("Wallet no longer has the complete held deposit");
+            }
+            remaining = hold.getAmount();
+            hold.setRemainingHoldAmount(remaining);
+        }
+        if (remaining == null || remaining.compareTo(amount) < 0
+                || currentFrozenBalance().compareTo(amount) < 0
+                || currentBalance().compareTo(amount) < 0) {
+            throw new IllegalStateException("Insufficient remaining held deposit");
+        }
+        balance = currentBalance().subtract(amount);
+        frozenBalance = currentFrozenBalance().subtract(amount);
+        hold.setRemainingHoldAmount(remaining.subtract(amount));
+        receiver.balance = receiver.currentBalance().add(amount);
+        Transaction debit = record(amount, TransactionType.TRANSFER);
+        Transaction credit = receiver.record(amount, TransactionType.TRANSFER);
+        return List.of(debit, credit);
     }
 
     public boolean hasEnoughBalance(BigDecimal amount) {

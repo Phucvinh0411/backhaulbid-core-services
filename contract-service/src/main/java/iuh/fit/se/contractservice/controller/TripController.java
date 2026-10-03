@@ -14,6 +14,8 @@ import iuh.fit.se.contractservice.dto.CreateDeliveryProofRequest;
 import iuh.fit.se.contractservice.dto.DeliveryProofResponse;
 import iuh.fit.se.contractservice.dto.CreateTripLocationRequest;
 import iuh.fit.se.contractservice.dto.TripLocationResponse;
+import iuh.fit.se.contractservice.dto.CancelLateTripRequest;
+import iuh.fit.se.contractservice.dto.TripDelaySettlementResponse;
 import iuh.fit.se.contractservice.service.TripService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,6 +65,35 @@ public class TripController {
             @Valid @RequestBody UpdateTripStatusRequest request
     ) {
         return TripResponse.from(tripService.updateStatus(accountId, parseRole(role), tripId, request));
+    }
+
+    @PostMapping("/{tripId}/cancel-late")
+    public TripResponse cancelLate(
+            @RequestHeader("X-User-Id") UUID accountId,
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable UUID tripId,
+            @Valid @RequestBody CancelLateTripRequest request
+    ) {
+        return TripResponse.from(tripService.cancelForLateDelivery(accountId, parseRole(role), tripId, request.reason()));
+    }
+
+    @GetMapping("/{tripId}/delay-settlements")
+    public List<TripDelaySettlementResponse> delaySettlements(
+            @RequestHeader("X-User-Id") UUID accountId,
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable UUID tripId
+    ) {
+        return tripService.delaySettlements(accountId, parseRole(role), tripId);
+    }
+
+    @GetMapping("/admin/late-settlements")
+    public List<TripDelaySettlementResponse> allDelaySettlementsForAdmin(
+            @RequestHeader("X-User-Role") String role
+    ) {
+        if (parseRole(role) != AccountRole.ADMIN) {
+            throw new org.springframework.web.server.ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required");
+        }
+        return tripService.allDelaySettlementsForAdmin();
     }
 
     @PatchMapping("/{tripId}/assignment")

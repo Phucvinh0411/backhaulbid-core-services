@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.UUID;
 
 /** Coordinates wallet mutations while keeping idempotency and transaction rules in one place. */
@@ -63,18 +64,39 @@ public class InternalWalletService {
         }
     }
 
+    /** Credits a previously charged auction fee back to the shipper exactly once. */
+    @Transactional
+    public InternalWalletOperation refund(UUID accountId, InternalWalletOperationRequest request) {
+        Transaction existing = findByOperationKey(request.idempotencyKey());
+        if (existing != null) return operation(existing, null);
+
+        Wallet wallet = wallet(accountId);
+        try {
+            Transaction transaction = wallet.deposit(request.amount());
+            return saveSuccess(wallet, transaction, request, TransactionType.REFUND, null);
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            throw failure(exception.getMessage());
+        }
+    }
+
     /** Releases the frozen deposit after a registration is completed or cancelled. */
     @Transactional
     public InternalWalletOperation release(UUID holdId, InternalWalletReleaseRequest request) {
-        Transaction existing = findSuccessfulOrFailed(request.idempotencyKey());
+        Transaction existing = findByOperationKey(request.idempotencyKey());
         if (existing != null) return operation(existing, null);
 
-        Transaction hold = hold(holdId);
+        Transaction hold = holdForUpdate(holdId);
         Wallet wallet = hold.getWallet();
         try {
-            Transaction transaction = wallet.unfreeze(hold.getAmount());
+            BigDecimal remaining = remainingHold(hold);
+            if (remaining.signum() == 0) {
+                return operation(hold, holdId);
+            }
+            Transaction transaction = wallet.unfreeze(remaining);
             transaction.setReferenceCode(request.idempotencyKey());
             transaction.setDescription("Release auction deposit hold " + holdId);
+            transaction.setIdempotencyKey(request.idempotencyKey());
+            hold.setRemainingHoldAmount(BigDecimal.ZERO);
             walletRepository.saveAndFlush(wallet);
             return persistedOperation(request.idempotencyKey(), false);
         } catch (IllegalArgumentException | IllegalStateException exception) {
@@ -85,18 +107,53 @@ public class InternalWalletService {
     /** Converts the frozen deposit into a penalty after a forfeiture decision. */
     @Transactional
     public InternalWalletOperation forfeit(UUID holdId, InternalWalletReleaseRequest request) {
-        Transaction existing = findSuccessfulOrFailed(request.idempotencyKey());
+        Transaction existing = findByOperationKey(request.idempotencyKey());
         if (existing != null) return operation(existing, null);
 
-        Transaction hold = hold(holdId);
+        Transaction hold = holdForUpdate(holdId);
         Wallet wallet = hold.getWallet();
         try {
-            wallet.unfreeze(hold.getAmount());
-            Transaction penalty = wallet.withdraw(hold.getAmount());
+            BigDecimal remaining = remainingHold(hold);
+            if (remaining.signum() == 0) {
+                throw new IllegalStateException("Deposit hold has no remaining amount");
+            }
+            wallet.unfreeze(remaining);
+            Transaction penalty = wallet.withdraw(remaining);
             penalty.setType(TransactionType.PENALTY);
             penalty.setReferenceCode(request.idempotencyKey());
             penalty.setDescription("Forfeit auction deposit hold " + holdId);
+            penalty.setIdempotencyKey(request.idempotencyKey());
+            hold.setRemainingHoldAmount(BigDecimal.ZERO);
             walletRepository.saveAndFlush(wallet);
+            return persistedOperation(request.idempotencyKey(), false);
+        } catch (IllegalArgumentException | IllegalStateException exception) {
+            throw failure(exception.getMessage());
+        }
+    }
+
+    /** Transfers a single incremental late-delivery penalty directly from the frozen deposit. */
+    @Transactional
+    public InternalWalletOperation settleHeldDeposit(UUID holdId,
+            iuh.fit.se.walletservice.dto.request.InternalWalletSettlementRequest request) {
+        Transaction existing = transactionRepository.findByIdempotencyKey(request.idempotencyKey()).orElse(null);
+        if (existing != null) return operation(existing, null);
+
+        Transaction hold = holdForUpdate(holdId);
+        Wallet source = hold.getWallet();
+        Wallet recipient = walletRepository.findByAccountIdForUpdate(request.recipientAccountId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Recipient wallet not found"));
+        try {
+            List<Transaction> transfers = source.transferFromHold(recipient, hold, request.amount());
+            Transaction debit = transfers.get(0);
+            Transaction credit = transfers.get(1);
+            debit.setIdempotencyKey(request.idempotencyKey());
+            debit.setReferenceCode(request.idempotencyKey());
+            debit.setDescription("Bồi thường giao hàng trễ bậc " + request.tier() + " chuyến " + request.tripId());
+            credit.setIdempotencyKey(request.idempotencyKey() + ":credit");
+            credit.setReferenceCode(request.idempotencyKey() + ":credit");
+            credit.setDescription("Nhận bồi thường giao hàng trễ bậc " + request.tier() + " chuyến " + request.tripId());
+            walletRepository.saveAndFlush(source);
+            walletRepository.saveAndFlush(recipient);
             return persistedOperation(request.idempotencyKey(), false);
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw failure(exception.getMessage());
@@ -111,6 +168,7 @@ public class InternalWalletService {
             UUID holdId) {
         transaction.setType(type);
         transaction.setReferenceCode(request.idempotencyKey());
+        transaction.setIdempotencyKey(request.idempotencyKey());
         transaction.setDescription(request.purpose() + " for auction " + request.auctionId()
                 + ", registration " + request.registrationId());
         walletRepository.saveAndFlush(wallet);
@@ -131,6 +189,11 @@ public class InternalWalletService {
         return transactionRepository.findByReferenceCode(referenceCode).orElse(null);
     }
 
+    private Transaction findByOperationKey(String key) {
+        return transactionRepository.findByIdempotencyKey(key)
+                .orElseGet(() -> findSuccessfulOrFailed(key));
+    }
+
     private Wallet wallet(UUID accountId) {
         return walletRepository.findByAccountId(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet not found"));
@@ -143,6 +206,19 @@ public class InternalWalletService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Wallet hold is not active");
         }
         return hold;
+    }
+
+    private Transaction holdForUpdate(UUID holdId) {
+        Transaction hold = transactionRepository.findByIdForUpdate(holdId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet hold not found"));
+        if (hold.getType() != TransactionType.FREEZE || hold.getStatus() != TransactionStatus.SUCCESS) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Wallet hold is not active");
+        }
+        return hold;
+    }
+
+    private BigDecimal remainingHold(Transaction hold) {
+        return hold.getRemainingHoldAmount() == null ? hold.getAmount() : hold.getRemainingHoldAmount();
     }
 
     private InternalWalletOperation operation(Transaction transaction, UUID holdId) {
