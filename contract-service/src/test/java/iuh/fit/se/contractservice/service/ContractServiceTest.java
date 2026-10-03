@@ -45,7 +45,7 @@ class ContractServiceTest {
                 .status(ContractStatus.DRAFT)
                 .signatures(new ArrayList<>())
                 .build();
-        when(contractRepository.findById(contract.getId())).thenReturn(Optional.of(contract));
+        when(contractRepository.findByIdForUpdate(contract.getId())).thenReturn(Optional.of(contract));
         when(contractRepository.save(any(Contract.class))).thenAnswer(invocation -> invocation.getArgument(0));
         when(signatureRepository.save(any(ContractSignature.class))).thenAnswer(invocation -> invocation.getArgument(0));
     }

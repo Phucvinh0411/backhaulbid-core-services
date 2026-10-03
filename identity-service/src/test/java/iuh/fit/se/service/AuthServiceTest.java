@@ -19,6 +19,7 @@ import org.mockito.Spy;
 import org.mapstruct.factory.Mappers;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Optional;
 import java.util.UUID;
@@ -88,8 +89,8 @@ class AuthServiceTest {
 
         // When-Then
         assertThatThrownBy(() -> authService.register(request))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Phone number already exists");
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getReason()).isEqualTo("Phone number already exists"));
         verify(accountRepository, never()).save(org.mockito.ArgumentMatchers.any());
     }
 
@@ -124,8 +125,8 @@ class AuthServiceTest {
 
         // When-Then
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("User not found");
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getReason()).isEqualTo("User not found"));
     }
 
     @Test
@@ -138,8 +139,8 @@ class AuthServiceTest {
 
         // When-Then
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Invalid password");
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getReason()).isEqualTo("Invalid password"));
     }
 
     @Test
@@ -152,8 +153,8 @@ class AuthServiceTest {
 
         // When-Then
         assertThatThrownBy(() -> authService.login(request))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessage("Account is not active");
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                        assertThat(exception.getReason()).isEqualTo("Account is not active"));
     }
 
     @Test

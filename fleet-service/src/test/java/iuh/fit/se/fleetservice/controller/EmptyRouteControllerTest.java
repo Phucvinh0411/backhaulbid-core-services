@@ -71,9 +71,14 @@ class EmptyRouteControllerTest {
         String request = objectMapper.writeValueAsString(new Object() {
             public final String truckId = "51H-12345";
             public final String companyId = "spoofed-company";
+            public final String origin = "TP. Hồ Chí Minh";
+            public final String destination = "Hà Nội";
             public final LocalDateTime expectedEmptyTime = LocalDateTime.now().plusHours(2);
+            public final LocalDateTime expectedArrivalTime = LocalDateTime.now().plusHours(6);
             public final double latitude = 10.8;
             public final double longitude = 106.7;
+            public final double destLatitude = 21.0285;
+            public final double destLongitude = 105.8542;
         });
 
         mockMvc.perform(post("/api/v1/empty-routes")
