@@ -3,7 +3,6 @@ package iuh.fit.se.walletservice.controller;
 import iuh.fit.se.walletservice.domain.operation.InternalWalletOperation;
 import iuh.fit.se.walletservice.dto.request.InternalWalletOperationRequest;
 import iuh.fit.se.walletservice.dto.request.InternalWalletReleaseRequest;
-import iuh.fit.se.walletservice.dto.request.InternalWalletSettlementRequest;
 import iuh.fit.se.walletservice.dto.response.InternalWalletOperationResponse;
 import iuh.fit.se.walletservice.mapper.InternalWalletOperationMapper;
 import iuh.fit.se.walletservice.service.InternalWalletService;
@@ -68,18 +67,6 @@ public class InternalWalletController {
         return internalWalletOperationMapper.toResponse(operation);
     }
 
-    /** Refunds a previously charged fee with an idempotency key. */
-    @PostMapping("/wallets/{accountId}/refunds")
-    @ResponseStatus(HttpStatus.CREATED)
-    public InternalWalletOperationResponse refund(
-            @PathVariable UUID accountId,
-            @RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @Valid @RequestBody InternalWalletOperationRequest request) {
-        authorize(token);
-        InternalWalletOperation operation = internalWalletService.refund(accountId, request);
-        return internalWalletOperationMapper.toResponse(operation);
-    }
-
     /** Releases a previously created deposit hold. */
     @PostMapping("/wallet-holds/{holdId}/release")
     public InternalWalletOperationResponse release(
@@ -99,16 +86,6 @@ public class InternalWalletController {
             @Valid @RequestBody InternalWalletReleaseRequest request) {
         authorize(token);
         InternalWalletOperation operation = internalWalletService.forfeit(holdId, request);
-        return internalWalletOperationMapper.toResponse(operation);
-    }
-
-    @PostMapping("/wallet-holds/{holdId}/settlements")
-    public InternalWalletOperationResponse settle(
-            @PathVariable UUID holdId,
-            @RequestHeader(value = "X-Internal-Token", required = false) String token,
-            @Valid @RequestBody InternalWalletSettlementRequest request) {
-        authorize(token);
-        InternalWalletOperation operation = internalWalletService.settleHeldDeposit(holdId, request);
         return internalWalletOperationMapper.toResponse(operation);
     }
 

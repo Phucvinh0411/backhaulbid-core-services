@@ -45,12 +45,6 @@ public class Transaction {
     @Column(name = "reference_code", length = 100)
     private String referenceCode;
 
-    @Column(name = "idempotency_key", length = 150, unique = true)
-    private String idempotencyKey;
-
-    @Column(name = "remaining_hold_amount", precision = 19, scale = 2)
-    private BigDecimal remainingHoldAmount;
-
     @Column(length = 500)
     private String description;
 

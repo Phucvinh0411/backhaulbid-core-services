@@ -19,8 +19,6 @@ import iuh.fit.se.contractservice.repository.DeliveryProofRepository;
 import iuh.fit.se.contractservice.repository.TripLocationUpdateRepository;
 import iuh.fit.se.contractservice.repository.TrackingLogRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
-import iuh.fit.se.contractservice.repository.TripDelaySettlementRepository;
-import iuh.fit.se.contractservice.dto.TripDelaySettlementResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -43,8 +41,6 @@ public class TripService {
     private final JourneyEventRepository journeyEventRepository;
     private final DeliveryProofRepository deliveryProofRepository;
     private final TripLocationUpdateRepository tripLocationUpdateRepository;
-    private final TripDelaySettlementRepository tripDelaySettlementRepository;
-    private final LateDeliveryService lateDeliveryService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     @Transactional(readOnly = true)
@@ -80,14 +76,9 @@ public class TripService {
                 && (request.cancellationReason() == null || request.cancellationReason().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation reason is required");
         }
-        trip.updateStatus(request.status());
+        trip.setStatus(request.status());
         trip.setCancellationReason(request.status() == TripStatus.CANCELLED ? request.cancellationReason().trim() : null);
-        Trip saved = tripRepository.save(trip);
-        if (request.status() == TripStatus.DELIVERED) lateDeliveryService.processTrip(saved);
-        if (request.status() == TripStatus.CANCELLED || request.status() == TripStatus.COMPLETED) {
-            lateDeliveryService.processTripAndReleaseIfClosed(saved);
-        }
-        return saved;
+        return tripRepository.save(trip);
     }
 
     @Transactional
@@ -124,14 +115,10 @@ public class TripService {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Invalid trip status transition from " + trip.getStatus() + " to " + request.status());
         }
-        trip.updateStatus(request.status());
-        Trip saved = tripRepository.save(trip);
-        if (request.status() == TripStatus.DELIVERED) lateDeliveryService.processTrip(saved);
-        if (request.status() == TripStatus.CANCELLED || request.status() == TripStatus.COMPLETED) {
-            lateDeliveryService.processTripAndReleaseIfClosed(saved);
-        }
+        trip.setStatus(request.status());
+        tripRepository.save(trip);
         TrackingLog log = TrackingLog.builder()
-                .trip(saved)
+                .trip(trip)
                 .latitude(request.latitude())
                 .longitude(request.longitude())
                 .status(request.status())
@@ -169,12 +156,8 @@ public class TripService {
                 && (request.note() == null || request.note().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Incident note is required");
         }
-        trip.updateStatus(nextStatus);
+        trip.setStatus(nextStatus);
         tripRepository.save(trip);
-        if (nextStatus == TripStatus.DELIVERED) lateDeliveryService.processTrip(trip);
-        if (nextStatus == TripStatus.CANCELLED || nextStatus == TripStatus.COMPLETED) {
-            lateDeliveryService.processTripAndReleaseIfClosed(trip);
-        }
         return journeyEventRepository.save(JourneyEvent.builder()
                 .trip(trip)
                 .actorId(accountId)
@@ -245,40 +228,6 @@ public class TripService {
     public TripLocationUpdate latestLocation(UUID accountId, AccountRole role, UUID tripId) {
         Trip trip = get(accountId, role, tripId);
         return tripLocationUpdateRepository.findFirstByTripIdOrderByRecordedAtDesc(trip.getId());
-    }
-
-    @Transactional
-    public Trip cancelForLateDelivery(UUID accountId, AccountRole role, UUID tripId, String reason) {
-        if (role != AccountRole.SHIPPER) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the shipper can cancel a late trip");
-        }
-        Trip trip = get(accountId, role, tripId);
-        boolean active = trip.getStatus() == TripStatus.WAITING_PICKUP
-                || trip.getStatus() == TripStatus.PICKED_UP || trip.getStatus() == TripStatus.IN_TRANSIT;
-        if (!active || trip.getDeliveredAt() != null || trip.getExpectedDeliveryAt() == null
-                || !lateDeliveryService.isLatePolicyEnabled(trip)
-                || !trip.getExpectedDeliveryAt().plus(java.time.Duration.ofHours(1)).isBefore(java.time.Instant.now())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Chỉ được hủy chuyến đang hoạt động khi đã trễ hơn 1 giờ và có tiền đặt trước được giữ");
-        }
-        lateDeliveryService.processTrip(trip);
-        trip.cancel(reason == null || reason.isBlank() ? "Chủ hàng hủy do giao trễ hơn 1 giờ" : reason.trim());
-        Trip cancelled = tripRepository.save(trip);
-        lateDeliveryService.releaseRemainingDepositIfClosed(cancelled);
-        lateDeliveryService.notifyLateCancellation(cancelled);
-        return cancelled;
-    }
-
-    @Transactional(readOnly = true)
-    public List<TripDelaySettlementResponse> delaySettlements(UUID accountId, AccountRole role, UUID tripId) {
-        Trip trip = get(accountId, role, tripId);
-        return tripDelaySettlementRepository.findByTripIdOrderByTierAsc(trip.getId()).stream()
-                .map(TripDelaySettlementResponse::from).toList();
-    }
-
-    @Transactional(readOnly = true)
-    public List<TripDelaySettlementResponse> allDelaySettlementsForAdmin() {
-        return lateDeliveryService.listForAdmin().stream().map(TripDelaySettlementResponse::from).toList();
     }
 
     private void ensureAccess(Trip trip, UUID accountId, AccountRole role) {

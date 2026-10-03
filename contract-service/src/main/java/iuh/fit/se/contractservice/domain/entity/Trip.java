@@ -36,30 +36,6 @@ public class Trip {
     @Column(name = "driver_id")
     private UUID driverId;
 
-    @Column(name = "auction_id")
-    private String auctionId;
-
-    @Column(name = "award_attempt_id", unique = true, length = 100)
-    private String awardAttemptId;
-
-    @Column(name = "winning_bid_id", length = 100)
-    private String winningBidId;
-
-    @Column(name = "expected_delivery_at")
-    private Instant expectedDeliveryAt;
-
-    @Column(name = "delivered_at")
-    private Instant deliveredAt;
-
-    @Column(name = "deposit_hold_id", length = 100)
-    private String depositHoldId;
-
-    @Column(name = "deposit_amount", precision = 19, scale = 2)
-    private BigDecimal depositAmount;
-
-    @Column(name = "deposit_released_at")
-    private Instant depositReleasedAt;
-
     @Column(name = "assignment_pin_hash", length = 64)
     private String assignmentPinHash;
 
@@ -110,9 +86,6 @@ public class Trip {
             throw new IllegalArgumentException("Trip status is required");
         }
         status = newStatus;
-        if (newStatus == TripStatus.DELIVERED && deliveredAt == null) {
-            deliveredAt = Instant.now();
-        }
     }
 
     public void completeTrip() {

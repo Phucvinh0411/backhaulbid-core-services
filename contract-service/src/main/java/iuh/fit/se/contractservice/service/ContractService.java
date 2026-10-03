@@ -13,7 +13,6 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Instant;
-import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 
@@ -47,21 +46,9 @@ public class ContractService {
         if (role != AccountRole.CARRIER && role != AccountRole.SHIPPER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only contract parties can sign");
         }
-        Contract contract = contractRepository.findByIdForUpdate(contractId)
-                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found"));
-        ensureAccess(contract, accountId, role);
-        if (contract.getStatus() == ContractStatus.CANCELLED
-                || contract.getStatus() == ContractStatus.EXPIRED
-                || contract.getStatus() == ContractStatus.SIGNED) {
+        Contract contract = get(accountId, role, contractId);
+        if (contract.getStatus() == ContractStatus.CANCELLED || contract.getStatus() == ContractStatus.SIGNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Contract cannot be signed in its current status");
-        }
-        if (contract.getSigningDeadlineAt() != null && Instant.now().isAfter(contract.getSigningDeadlineAt())) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Contract signing deadline has passed");
-        }
-        boolean auctionAwardContract = contract.getTrip() != null
-                && contract.getTrip().getAwardAttemptId() != null;
-        if (auctionAwardContract && role == AccountRole.SHIPPER && !hasSigned(contract, AccountRole.CARRIER)) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Carrier must sign the contract first");
         }
 
         boolean newSignature = signatureRepository.findByContractIdAndAccountId(contractId, accountId).isEmpty();
@@ -84,15 +71,7 @@ public class ContractService {
         signatureRepository.save(signature);
 
         contract.setStatus(contract.isFullySigned() ? ContractStatus.SIGNED : ContractStatus.WAITING_SIGNATURE);
-        if (auctionAwardContract && role == AccountRole.CARRIER && contract.getStatus() != ContractStatus.SIGNED) {
-            contract.setSigningDeadlineAt(Instant.now().plus(Duration.ofHours(24)));
-        }
         return contractRepository.save(contract);
-    }
-
-    private boolean hasSigned(Contract contract, AccountRole role) {
-        return contract.getSignatures() != null && contract.getSignatures().stream()
-                .anyMatch(signature -> signature.getRole() == role && signature.getSignedAt() != null);
     }
 
     private void ensureAccess(Contract contract, UUID accountId, AccountRole role) {
