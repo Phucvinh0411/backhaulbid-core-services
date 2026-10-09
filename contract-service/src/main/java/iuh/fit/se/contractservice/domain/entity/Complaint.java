@@ -1,5 +1,6 @@
 package iuh.fit.se.contractservice.domain.entity;
 
+import iuh.fit.se.contractservice.domain.enums.ComplaintCategory;
 import iuh.fit.se.contractservice.domain.enums.ComplaintDecision;
 import iuh.fit.se.contractservice.domain.enums.ComplaintStatus;
 import jakarta.persistence.*;
@@ -32,6 +33,11 @@ public class Complaint {
 
     @Column(name = "respondent_id", nullable = false)
     private UUID respondentId;
+
+    /** Null for complaints created before categories were introduced. */
+    @Enumerated(EnumType.STRING)
+    @Column(length = 40)
+    private ComplaintCategory category;
 
     @Column(nullable = false, length = 200)
     private String title;

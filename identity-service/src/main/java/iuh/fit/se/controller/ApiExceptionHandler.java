@@ -13,6 +13,16 @@ import org.springframework.web.server.ResponseStatusException;
 @RestControllerAdvice
 public class ApiExceptionHandler {
 
+    @ExceptionHandler(org.springframework.web.bind.MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, Object>> handleInvalidRequest(
+            org.springframework.web.bind.MethodArgumentNotValidException exception) {
+        Map<String, String> fields = new java.util.LinkedHashMap<>();
+        for (var error : exception.getBindingResult().getFieldErrors())
+            fields.putIfAbsent(error.getField(), java.util.Objects.requireNonNullElse(error.getDefaultMessage(), "Invalid value"));
+        String message = fields.isEmpty() ? "Request validation failed" : fields.values().iterator().next();
+        return ResponseEntity.badRequest().body(Map.of("message", message, "fieldErrors", fields));
+    }
+
     @ExceptionHandler(ResponseStatusException.class)
     public ResponseEntity<Map<String, String>> handleResponseStatus(
             ResponseStatusException exception) {

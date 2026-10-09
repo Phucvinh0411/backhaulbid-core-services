@@ -16,11 +16,14 @@ public record TripLocationResponse(
         String label,
         TripLocationSource source,
         TripStatus status,
-        Instant recordedAt
+        Instant recordedAt,
+        Instant capturedAt,
+        Double accuracyMeters,
+        UUID milestoneId
 ) {
     public static TripLocationResponse from(TripLocationUpdate location) {
         return new TripLocationResponse(location.getId(), location.getTrip().getId(), location.getActorId(),
                 location.getLatitude(), location.getLongitude(), location.getLabel(), location.getSource(),
-                location.getStatus(), location.getRecordedAt());
+                location.getStatus(), location.getRecordedAt(), location.getCapturedAt(), location.getAccuracyMeters(), location.getMilestoneId());
     }
 }

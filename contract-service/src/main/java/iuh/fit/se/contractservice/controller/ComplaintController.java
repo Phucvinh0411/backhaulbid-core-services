@@ -23,8 +23,10 @@ public class ComplaintController {
     private final ComplaintService complaintService;
 
     @GetMapping
-    public List<ComplaintResponse> list(@RequestHeader("X-User-Id") UUID accountId, @RequestHeader("X-User-Role") String role) {
-        return complaintService.list(accountId, parseRole(role));
+    public List<ComplaintResponse> list(@RequestHeader("X-User-Id") UUID accountId,
+                                        @RequestHeader("X-User-Role") String role,
+                                        @RequestParam(required = false) String category) {
+        return complaintService.list(accountId, parseRole(role), category);
     }
 
     @GetMapping("/{complaintId}")

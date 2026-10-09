@@ -3,6 +3,8 @@ package iuh.fit.se.contractservice.repository;
 import iuh.fit.se.contractservice.domain.entity.Trip;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
@@ -15,6 +17,10 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
 
     Optional<Trip> findByAwardAttemptId(String awardAttemptId);
 
+    @Query("select t.id from Trip t where t.driverId = :profile and t.status not in :closed")
+    List<UUID> findIdsByDriverIdAndStatusNotIn(@Param("profile") UUID profile,
+                                              @Param("closed") java.util.Collection<iuh.fit.se.contractservice.domain.enums.TripStatus> closed);
+
     @Query(value = "select t.* from trips t where " +
             "((t.expected_delivery_at < :now and t.deposit_hold_id is not null and t.deposit_amount > 0 and " +
             "(t.status not in ('CANCELLED', 'COMPLETED') or exists (select 1 from trip_delay_settlements s " +
@@ -26,7 +32,11 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
 
     List<Trip> findByCarrierIdOrderByCreatedAtDesc(UUID carrierId);
 
-    List<Trip> findByDriverIdOrderByCreatedAtDesc(UUID driverId);
+    List<Trip> findByDriverAccountIdOrderByCreatedAtDesc(UUID driverAccountId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select t from Trip t where t.id = :id")
+    Optional<Trip> findByIdForUpdate(@Param("id") UUID id);
 
     List<Trip> findByShipperIdOrderByCreatedAtDesc(UUID shipperId);
 

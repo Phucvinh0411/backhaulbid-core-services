@@ -7,7 +7,8 @@ spring:
   servlet:
     multipart:
       max-file-size: 5MB
-      max-request-size: 6MB
+      max-request-size: 16MB
+      file-size-threshold: 16MB
 
   # ──────────────────────────────────────────
   # Docker and CI must supply these values; keeping them required prevents accidental database drift.
@@ -53,8 +54,21 @@ eureka:
     prefer-ip-address: true
 
 app:
+  ekyc:
+    nfc-enabled: ${NFC_EKYC_ENABLED:false}
+    evidence-key: ${EKYC_EVIDENCE_ENCRYPTION_KEY:}
+    local-automatic: ${NFC_LOCAL_AUTOMATIC:DISABLED}
   jwt:
     secret: ${JWT_SECRET}
+  # Driver code sign-in (V3.1): contract owns assignments; the replay key never leaves the backend.
+  contract:
+    url: ${CONTRACT_SERVICE_URL:http://contract-service:8080}
+  # Cargo-liability certificates are private: identity reads them from media-service over the internal token only.
+  media:
+    url: ${MEDIA_SERVICE_URL:http://media-service:8080}
+  internal-token: ${INTERNAL_SERVICE_TOKEN:}
+  driver:
+    replay-key: ${DRIVER_REPLAY_KEY:}
 
 management:
   endpoints:

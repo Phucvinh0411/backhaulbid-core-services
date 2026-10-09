@@ -20,6 +20,11 @@ import java.util.Collections;
 @Component
 public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
 
+    // Streaming photos and error responses dispatch again after the stateless context is cleared.
+    // Rebuild the same gateway-authenticated scope instead of permitting anonymous dispatches.
+    @Override protected boolean shouldNotFilterAsyncDispatch() { return false; }
+    @Override protected boolean shouldNotFilterErrorDispatch() { return false; }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
@@ -31,7 +36,10 @@ public class GatewayHeaderAuthenticationFilter extends OncePerRequestFilter {
 
             if (StringUtils.hasText(userId) && StringUtils.hasText(role)) {
                 // Thêm tiền tố ROLE_ để Spring Security nhận diện đúng với @PreAuthorize
-                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + role);
+                // A code-login driver session is not a DRIVER account: it gets its own authority so no
+                // account endpoint guarded by hasRole('DRIVER') accepts it.
+                boolean driverSession = "DRIVER_ASSIGNMENT".equals(request.getHeader("X-Auth-Type"));
+                SimpleGrantedAuthority authority = new SimpleGrantedAuthority(driverSession ? "ROLE_DRIVER_SESSION" : "ROLE_" + role);
 
                 // Nạp vào SecurityContext
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(

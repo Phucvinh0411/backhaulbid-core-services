@@ -52,6 +52,32 @@ public class JwtTokenProvider {
                 .compact();
     }
 
+    /**
+     * Driver-session access token: subject is the session (not an account), scoped to one trip, profile and
+     * assignment version. The gateway refuses it outside the driver allowlist; contract re-checks it.
+     */
+    public String generateDriverAccessToken(iuh.fit.se.domain.entity.DriverSession session) {
+        Date now = new Date();
+        return Jwts.builder()
+                .setSubject(session.getId().toString())
+                .setIssuer("backhaulbid-identity")
+                .setAudience("backhaulbid-driver")
+                .claim("role", "DRIVER")
+                .claim("auth_type", "DRIVER_ASSIGNMENT")
+                .claim("trip_id", session.getTripId().toString())
+                .claim("driver_profile_id", session.getDriverProfileId().toString())
+                .claim("assignment_id", session.getGrantId().toString())
+                .claim("assignment_version", session.getAssignmentVersion())
+                .setIssuedAt(now)
+                .setExpiration(new Date(now.getTime() + jwtExpirationMs))
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public long accessTtlSeconds() {
+        return jwtExpirationMs / 1000;
+    }
+
     // Tạo Refresh Token và lưu Database
     public RefreshToken generateRefreshToken(Account account) {
         RefreshToken refreshToken = new RefreshToken();

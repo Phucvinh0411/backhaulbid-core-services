@@ -12,6 +12,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 import java.util.UUID;
+import java.time.Instant;
 
 @Service
 @RequiredArgsConstructor
@@ -37,6 +38,7 @@ public class AddressBookService {
                 .province(request.province().trim())
                 .detail(request.detail().trim())
                 .build();
+        applyCoordinates(entry, request);
 
         return AddressResponse.from(addressBookRepository.save(entry));
     }
@@ -49,6 +51,7 @@ public class AddressBookService {
         entry.setContactPhone(request.contactPhone().trim());
         entry.setProvince(request.province().trim());
         entry.setDetail(request.detail().trim());
+        applyCoordinates(entry, request);
         return AddressResponse.from(addressBookRepository.save(entry));
     }
 
@@ -60,5 +63,16 @@ public class AddressBookService {
     private AddressBookEntry findOwned(UUID accountId, UUID addressId) {
         return addressBookRepository.findByIdAndAccountId(addressId, accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Address not found"));
+    }
+
+    private void applyCoordinates(AddressBookEntry entry, AddressRequest request) {
+        if (!request.isCoordinatePairValid()
+                || (request.coordinateSource() != null && !request.coordinateSource().equals("USER_CONFIRMED")))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Coordinates must be a confirmed, valid pair");
+        entry.setLatitude(request.latitude());
+        entry.setLongitude(request.longitude());
+        entry.setCoordinateSource(request.latitude() == null ? null : "USER_CONFIRMED");
+        // Confirmation is a server observation, never a client supplied timestamp.
+        entry.setCoordinateConfirmedAt(request.latitude() == null ? null : Instant.now());
     }
 }

@@ -16,4 +16,5 @@ public class RepresentativeVerificationResponse {
     private String status;
     private String fullName;
     private String failureReason;
+    private String verificationMethod;
 }

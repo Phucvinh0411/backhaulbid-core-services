@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface CompanyRepository extends JpaRepository<Company, UUID> {
+    long countByVerificationStatus(VerificationStatus status);
     Optional<Company> findByAccount_Id(UUID accountId);
     boolean existsByTaxCodeAndAccount_IdNot(String taxCode, UUID accountId);
     Page<Company> findAllByVerificationStatus(

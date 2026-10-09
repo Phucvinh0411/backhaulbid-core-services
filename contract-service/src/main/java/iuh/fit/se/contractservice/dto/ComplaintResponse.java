@@ -2,6 +2,7 @@ package iuh.fit.se.contractservice.dto;
 
 import iuh.fit.se.contractservice.domain.entity.Complaint;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
+import iuh.fit.se.contractservice.domain.enums.ComplaintCategory;
 import iuh.fit.se.contractservice.domain.enums.ComplaintDecision;
 import iuh.fit.se.contractservice.domain.enums.ComplaintStatus;
 
@@ -14,6 +15,7 @@ public record ComplaintResponse(
         UUID tripId,
         UUID reporterId,
         UUID respondentId,
+        ComplaintCategory category,
         String title,
         String description,
         String evidenceUrl,
@@ -30,6 +32,7 @@ public record ComplaintResponse(
                 complaint.getTripId(),
                 complaint.getReporterId(),
                 complaint.getRespondentId(),
+                complaint.getCategory(),
                 complaint.getTitle(),
                 complaint.getDescription(),
                 complaint.getEvidenceUrl(),

@@ -20,6 +20,7 @@ import iuh.fit.se.contractservice.repository.TripLocationUpdateRepository;
 import iuh.fit.se.contractservice.repository.TrackingLogRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
 import iuh.fit.se.contractservice.repository.TripDelaySettlementRepository;
+import iuh.fit.se.contractservice.repository.TripTrackingSessionRepository;
 import iuh.fit.se.contractservice.dto.TripDelaySettlementResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -28,10 +29,10 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.UUID;
+import iuh.fit.se.contractservice.service.driveraccess.DriverAccessPolicy;
+import iuh.fit.se.contractservice.service.driveraccess.DriverGrantService;
+import iuh.fit.se.contractservice.service.driveraccess.DriverScope;
 import iuh.fit.se.contractservice.dto.CreateDeliveryProofRequest;
 import iuh.fit.se.contractservice.dto.CreateTripLocationRequest;
 
@@ -45,14 +46,20 @@ public class TripService {
     private final TripLocationUpdateRepository tripLocationUpdateRepository;
     private final TripDelaySettlementRepository tripDelaySettlementRepository;
     private final LateDeliveryService lateDeliveryService;
-    private final SecureRandom secureRandom = new SecureRandom();
+    private final FleetDriverClient fleetDriverClient;
+    private final TripTrackingSessionRepository trackingSessionRepository;
+    private final DriverGrantService driverGrantService;
+    private final DriverAccessPolicy driverAccessPolicy;
+    private final TripHandoverService tripHandoverService;
 
     @Transactional(readOnly = true)
     public List<Trip> list(UUID accountId, AccountRole role, TripStatus status) {
         List<Trip> trips = switch (role) {
             case ADMIN -> tripRepository.findAllByOrderByCreatedAtDesc();
             case CARRIER -> tripRepository.findByCarrierIdOrderByCreatedAtDesc(accountId);
-            case DRIVER -> tripRepository.findByDriverIdOrderByCreatedAtDesc(accountId);
+            // A code-login session sees exactly its own trip; a legacy driver account sees its claimed trips.
+            case DRIVER -> DriverAccessPolicy.isDriverSession() ? scopedTrip(accountId, role)
+                    : tripRepository.findByDriverAccountIdOrderByCreatedAtDesc(accountId);
             case SHIPPER -> tripRepository.findByShipperIdOrderByCreatedAtDesc(accountId);
         };
         return status == null ? trips : trips.stream().filter(trip -> trip.getStatus() == status).toList();
@@ -71,7 +78,7 @@ public class TripService {
         if (role != AccountRole.CARRIER && role != AccountRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier or admin role required");
         }
-        Trip trip = get(accountId, role, tripId);
+        Trip trip = lock(accountId, role, tripId);
         if (!isAllowedTransition(trip.getStatus(), request.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Invalid trip status transition from " + trip.getStatus() + " to " + request.status());
@@ -80,7 +87,11 @@ public class TripService {
                 && (request.cancellationReason() == null || request.cancellationReason().isBlank())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cancellation reason is required");
         }
+        if (request.status() == TripStatus.PICKED_UP) {
+            tripHandoverService.requireReadyForPickup(trip.getId());
+        }
         trip.updateStatus(request.status());
+        stopTrackingIfClosed(trip);
         trip.setCancellationReason(request.status() == TripStatus.CANCELLED ? request.cancellationReason().trim() : null);
         Trip saved = tripRepository.save(trip);
         if (request.status() == TripStatus.DELIVERED) lateDeliveryService.processTrip(saved);
@@ -100,15 +111,49 @@ public class TripService {
         if (role != AccountRole.CARRIER && role != AccountRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier or admin role required");
         }
-        Trip trip = get(accountId, role, tripId);
+        Trip trip = tripRepository.findByIdForUpdate(tripId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
+        ensureAccess(trip, accountId, role);
         if (trip.getStatus() != TripStatus.WAITING_PICKUP) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only waiting trips can be assigned");
         }
-        String pin = String.format("%06d", secureRandom.nextInt(1_000_000));
-        trip.setDriverId(request.driverId());
-        trip.setAssignmentPinHash(sha256(pin));
-        tripRepository.save(trip);
-        return new TripAssignmentResponse(trip.getId(), trip.getDriverId(), pin, trip.getStatus());
+        fleetDriverClient.requireAssignableDriver(trip.getCarrierId(), request.driverId());
+        var issued = driverGrantService.issue(trip, request.driverId(), accountId, "REASSIGNED");
+        return new TripAssignmentResponse(trip.getId(), trip.getDriverId(), issued.grantId(), issued.code(),
+                issued.expiresAt(), trip.getStatus(), issued.assignmentVersion());
+    }
+
+    /**
+     * New code for the same fleet profile on an active trip (lost phone or session). Status, events and GPS
+     * history stay; the previous code, its session and any legacy driver account lose access.
+     */
+    @Transactional
+    public TripAssignmentResponse reissueDriverAccess(UUID accountId, AccountRole role, UUID tripId) {
+        if (role != AccountRole.CARRIER) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier role required");
+        }
+        Trip trip = tripRepository.findByIdForUpdate(tripId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
+        ensureAccess(trip, accountId, role);
+        if (trip.getDriverId() == null) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Chuyến chưa được phân công tài xế");
+        }
+        if (trip.getStatus() != TripStatus.WAITING_PICKUP && trip.getStatus() != TripStatus.PICKED_UP
+                && trip.getStatus() != TripStatus.IN_TRANSIT) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Chỉ cấp lại mã cho chuyến đang hoạt động");
+        }
+        fleetDriverClient.requireAssignableDriver(trip.getCarrierId(), trip.getDriverId());
+        var issued = driverGrantService.issue(trip, trip.getDriverId(), accountId, "REISSUED");
+        return new TripAssignmentResponse(trip.getId(), trip.getDriverId(), issued.grantId(), issued.code(),
+                issued.expiresAt(), trip.getStatus(), issued.assignmentVersion());
+    }
+
+    private List<Trip> scopedTrip(UUID sessionId, AccountRole role) {
+        UUID scoped = DriverScope.current().tripId();
+        if (scoped == null) return List.of();
+        return tripRepository.findById(scoped)
+                .filter(trip -> driverAccessPolicy.allows(trip, sessionId, role, DriverAccessPolicy.Mode.READ))
+                .map(List::of).orElse(List.of());
     }
 
     @Transactional
@@ -116,7 +161,7 @@ public class TripService {
         if (role != AccountRole.CARRIER && role != AccountRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier or admin role required");
         }
-        Trip trip = get(accountId, role, tripId);
+        Trip trip = lock(accountId, role, tripId);
         if (trip.getStatus() == TripStatus.CANCELLED || trip.getStatus() == TripStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot add tracking to a closed trip");
         }
@@ -125,6 +170,7 @@ public class TripService {
                     "Invalid trip status transition from " + trip.getStatus() + " to " + request.status());
         }
         trip.updateStatus(request.status());
+        stopTrackingIfClosed(trip);
         Trip saved = tripRepository.save(trip);
         if (request.status() == TripStatus.DELIVERED) lateDeliveryService.processTrip(saved);
         if (request.status() == TripStatus.CANCELLED || request.status() == TripStatus.COMPLETED) {
@@ -145,7 +191,7 @@ public class TripService {
                 && role != AccountRole.SHIPPER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Unsupported role for journey updates");
         }
-        Trip trip = get(accountId, role, tripId);
+        Trip trip = lock(accountId, role, tripId);
         if (trip.getStatus() == TripStatus.CANCELLED || trip.getStatus() == TripStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot update a closed trip");
         }
@@ -157,6 +203,9 @@ public class TripService {
         if (nextStatus != trip.getStatus() && !isAllowedTransition(trip.getStatus(), nextStatus)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Invalid trip status transition from " + trip.getStatus() + " to " + nextStatus);
+        }
+        if (nextStatus == TripStatus.PICKED_UP && trip.getStatus() != TripStatus.PICKED_UP) {
+            tripHandoverService.requireReadyForPickup(trip.getId());
         }
         if (request.eventType() == JourneyEventType.ADMIN_OVERRIDE && role != AccountRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required for override");
@@ -170,6 +219,7 @@ public class TripService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Incident note is required");
         }
         trip.updateStatus(nextStatus);
+        stopTrackingIfClosed(trip);
         tripRepository.save(trip);
         if (nextStatus == TripStatus.DELIVERED) lateDeliveryService.processTrip(trip);
         if (nextStatus == TripStatus.CANCELLED || nextStatus == TripStatus.COMPLETED) {
@@ -197,7 +247,7 @@ public class TripService {
         if (role != AccountRole.CARRIER && role != AccountRole.ADMIN && role != AccountRole.DRIVER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier, driver or admin role required");
         }
-        Trip trip = get(accountId, role, tripId);
+        Trip trip = lock(accountId, role, tripId);
         if (trip.getStatus() == TripStatus.CANCELLED || trip.getStatus() == TripStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot add proof to a closed trip");
         }
@@ -220,13 +270,15 @@ public class TripService {
         if (role != AccountRole.CARRIER && role != AccountRole.ADMIN && role != AccountRole.DRIVER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier, driver or admin role required");
         }
-        Trip trip = get(accountId, role, tripId);
+        Trip trip = lock(accountId, role, tripId);
         if (trip.getStatus() == TripStatus.CANCELLED || trip.getStatus() == TripStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot update location for a closed trip");
         }
         return tripLocationUpdateRepository.save(TripLocationUpdate.builder()
                 .trip(trip)
                 .actorId(accountId)
+                .actorType(role == AccountRole.DRIVER && DriverAccessPolicy.isDriverSession() ? "DRIVER_SESSION" : "ACCOUNT")
+                .actorRole(role)
                 .latitude(request.latitude())
                 .longitude(request.longitude())
                 .label(request.label() == null ? null : request.label().trim())
@@ -252,7 +304,7 @@ public class TripService {
         if (role != AccountRole.SHIPPER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the shipper can cancel a late trip");
         }
-        Trip trip = get(accountId, role, tripId);
+        Trip trip = lock(accountId, role, tripId);
         boolean active = trip.getStatus() == TripStatus.WAITING_PICKUP
                 || trip.getStatus() == TripStatus.PICKED_UP || trip.getStatus() == TripStatus.IN_TRANSIT;
         if (!active || trip.getDeliveredAt() != null || trip.getExpectedDeliveryAt() == null
@@ -263,6 +315,7 @@ public class TripService {
         }
         lateDeliveryService.processTrip(trip);
         trip.cancel(reason == null || reason.isBlank() ? "Chủ hàng hủy do giao trễ hơn 1 giờ" : reason.trim());
+        stopTrackingIfClosed(trip);
         Trip cancelled = tripRepository.save(trip);
         lateDeliveryService.releaseRemainingDepositIfClosed(cancelled);
         lateDeliveryService.notifyLateCancellation(cancelled);
@@ -281,10 +334,28 @@ public class TripService {
         return lateDeliveryService.listForAdmin().stream().map(TripDelaySettlementResponse::from).toList();
     }
 
+    private Trip lock(UUID accountId, AccountRole role, UUID tripId) {
+        Trip trip = tripRepository.findByIdForUpdate(tripId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
+        ensureAccess(trip, accountId, role, DriverAccessPolicy.Mode.WRITE);
+        return trip;
+    }
+
+    private void stopTrackingIfClosed(Trip trip) {
+        if (trip.getStatus() == TripStatus.DELIVERED || trip.getStatus() == TripStatus.COMPLETED
+                || trip.getStatus() == TripStatus.CANCELLED) {
+            trackingSessionRepository.stopForTrip(trip.getId(), java.time.Instant.now());
+        }
+    }
+
     private void ensureAccess(Trip trip, UUID accountId, AccountRole role) {
+        ensureAccess(trip, accountId, role, DriverAccessPolicy.Mode.READ);
+    }
+
+    private void ensureAccess(Trip trip, UUID accountId, AccountRole role, DriverAccessPolicy.Mode mode) {
         boolean allowed = role == AccountRole.ADMIN
                 || (role == AccountRole.CARRIER && accountId.equals(trip.getCarrierId()))
-                || (role == AccountRole.DRIVER && accountId.equals(trip.getDriverId()))
+                || driverAccessPolicy.allows(trip, accountId, role, mode)
                 || (role == AccountRole.SHIPPER && accountId.equals(trip.getShipperId()));
         if (!allowed) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this trip");
@@ -299,18 +370,5 @@ public class TripService {
             case DELIVERED -> next == TripStatus.COMPLETED;
             case COMPLETED, CANCELLED -> false;
         };
-    }
-
-    private String sha256(String value) {
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256").digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            StringBuilder hex = new StringBuilder(digest.length * 2);
-            for (byte item : digest) {
-                hex.append(String.format("%02x", item));
-            }
-            return hex.toString();
-        } catch (NoSuchAlgorithmException exception) {
-            throw new IllegalStateException("SHA-256 is not available", exception);
-        }
     }
 }

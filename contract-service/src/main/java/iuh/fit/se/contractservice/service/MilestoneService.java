@@ -1,6 +1,9 @@
 package iuh.fit.se.contractservice.service;
 
 import iuh.fit.se.contractservice.domain.entity.Trip;
+import iuh.fit.se.contractservice.domain.entity.TripLocationUpdate;
+import iuh.fit.se.contractservice.domain.entity.TripLocationSource;
+import iuh.fit.se.contractservice.repository.TripLocationUpdateRepository;
 import iuh.fit.se.contractservice.domain.entity.TripMilestone;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
 import iuh.fit.se.contractservice.domain.enums.MilestoneStatus;
@@ -9,6 +12,7 @@ import iuh.fit.se.contractservice.dto.CreateMilestoneRequest;
 import iuh.fit.se.contractservice.dto.MilestoneCheckInRequest;
 import iuh.fit.se.contractservice.repository.TripMilestoneRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
+import iuh.fit.se.contractservice.service.driveraccess.DriverAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -37,6 +41,8 @@ public class MilestoneService {
     private final TripMilestoneRepository milestoneRepository;
     private final GeoFencingService       geoFencingService;
     private final RabbitTemplate          rabbitTemplate;
+    private final TripLocationUpdateRepository locationRepository;
+    private final DriverAccessPolicy driverAccess;
 
     // ------------------------------------------------------------------ QUERY
 
@@ -91,8 +97,9 @@ public class MilestoneService {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver or admin role required");
         }
 
-        Trip trip = getTrip(tripId);
-        ensureAccess(trip, accountId, role);
+        Trip trip = tripRepository.findByIdForUpdate(tripId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
+        ensureAccess(trip, accountId, role, DriverAccessPolicy.Mode.WRITE);
 
         // Chuyến phải đang vận chuyển mới được check-in milestone
         if (trip.getStatus() != TripStatus.IN_TRANSIT && trip.getStatus() != TripStatus.PICKED_UP) {
@@ -134,6 +141,12 @@ public class MilestoneService {
         milestone.setActualLng(request.currentLng());
         milestone.setReachedAt(Instant.now());
         TripMilestone saved = milestoneRepository.save(milestone);
+        // The check-in is a real coordinate observation, not an inferred position.
+        locationRepository.save(TripLocationUpdate.builder()
+                .trip(trip).actorId(accountId).actorRole(role).milestoneId(saved.getId())
+                .actorType(role == AccountRole.DRIVER && DriverAccessPolicy.isDriverSession() ? "DRIVER_SESSION" : "ACCOUNT").latitude(request.currentLat()).longitude(request.currentLng())
+                .capturedAt(saved.getReachedAt()).label(saved.getMilestoneName())
+                .source(TripLocationSource.CHECK_IN).status(trip.getStatus()).build());
 
         // Publish RabbitMQ event
         publishMilestoneReachedEvent(saved, trip);
@@ -149,9 +162,13 @@ public class MilestoneService {
     }
 
     private void ensureAccess(Trip trip, UUID accountId, AccountRole role) {
+        ensureAccess(trip, accountId, role, DriverAccessPolicy.Mode.READ);
+    }
+
+    private void ensureAccess(Trip trip, UUID accountId, AccountRole role, DriverAccessPolicy.Mode mode) {
         boolean allowed = role == AccountRole.ADMIN
                 || (role == AccountRole.CARRIER && accountId.equals(trip.getCarrierId()))
-                || (role == AccountRole.DRIVER  && accountId.equals(trip.getDriverId()))
+                || driverAccess.allows(trip, accountId, role, mode)
                 || (role == AccountRole.SHIPPER && accountId.equals(trip.getShipperId()));
         if (!allowed) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this trip");

@@ -8,4 +8,5 @@ import java.util.UUID;
 
 public interface JourneyEventRepository extends JpaRepository<JourneyEvent, UUID> {
     List<JourneyEvent> findByTripIdOrderByRecordedAtAsc(UUID tripId);
+    JourneyEvent findFirstByTripIdOrderByRecordedAtDesc(UUID tripId);
 }

@@ -30,13 +30,20 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        if (request.getRole()==null || !java.util.Set.of(iuh.fit.se.domain.enums.AccountRole.SHIPPER,
+                iuh.fit.se.domain.enums.AccountRole.CARRIER, iuh.fit.se.domain.enums.AccountRole.DRIVER).contains(request.getRole()))
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Public registration requires SHIPPER, CARRIER or DRIVER");
         if (accountRepository.existsByPhone(request.getPhone())) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number already exists");
+        }
+        String email = request.getEmail() == null || request.getEmail().isBlank() ? null : request.getEmail().trim();
+        if (email != null && accountRepository.existsByEmail(email)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
         }
 
         Account account = Account.builder()
                 .phone(request.getPhone())
-                .email(request.getEmail())
+                .email(email)
                 .passwordHash(passwordEncoder.encode(request.getPassword()))
                 .role(request.getRole())
                 .status(AccountStatus.ACTIVE)

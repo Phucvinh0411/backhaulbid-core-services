@@ -43,7 +43,11 @@ public class WithdrawalService {
     @Transactional
     public WithdrawalResponse create(UUID accountId, WithdrawalRequestDto request) {
         validateWholeAmount(request.amount());
-        Wallet wallet = wallet(accountId);
+        Wallet wallet = walletRepository.findByAccountIdForUpdate(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet not found"));
+        if (!wallet.hasEnoughBalance(request.amount())) {
+            throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Insufficient available balance");
+        }
         WithdrawalRequest withdrawal = withdrawalRepository.saveAndFlush(WithdrawalRequest.builder()
                 .accountId(accountId)
                 .amount(request.amount().setScale(2))

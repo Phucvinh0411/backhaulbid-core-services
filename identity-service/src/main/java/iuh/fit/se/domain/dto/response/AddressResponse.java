@@ -14,8 +14,17 @@ public record AddressResponse(
         String province,
         String detail,
         Instant createdAt,
-        Instant updatedAt
+        Instant updatedAt,
+        Double latitude,
+        Double longitude,
+        String coordinateSource,
+        Instant coordinateConfirmedAt
 ) {
+    public AddressResponse(UUID id, UUID accountId, String label, String contactName, String contactPhone,
+                           String province, String detail, Instant createdAt, Instant updatedAt) {
+        this(id, accountId, label, contactName, contactPhone, province, detail, createdAt, updatedAt,
+                null, null, null, null);
+    }
     public static AddressResponse from(AddressBookEntry entry) {
         return new AddressResponse(
                 entry.getId(),
@@ -26,6 +35,7 @@ public record AddressResponse(
                 entry.getProvince(),
                 entry.getDetail(),
                 entry.getCreatedAt(),
-                entry.getUpdatedAt());
+                entry.getUpdatedAt(), entry.getLatitude(), entry.getLongitude(),
+                entry.getCoordinateSource(), entry.getCoordinateConfirmedAt());
     }
 }

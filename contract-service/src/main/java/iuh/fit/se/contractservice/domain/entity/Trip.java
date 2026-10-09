@@ -36,6 +36,24 @@ public class Trip {
     @Column(name = "driver_id")
     private UUID driverId;
 
+    @Column(name = "driver_account_id")
+    private UUID driverAccountId;
+
+    /** Increases on every assignment or reissue; grants and driver sessions of older versions stop matching. */
+    @Column(name = "assignment_version", nullable = false)
+    @Builder.Default
+    private long assignmentVersion = 0;
+
+    /** Driver session (code login) currently allowed on this trip; separate from driverAccountId. */
+    @Column(name = "driver_session_id")
+    private UUID driverSessionId;
+
+    @Column(name = "assignment_pin_expires_at")
+    private Instant assignmentPinExpiresAt;
+
+    @Column(name = "assignment_pin_attempts", nullable = false)
+    private int assignmentPinAttempts;
+
     @Column(name = "auction_id")
     private String auctionId;
 
@@ -68,6 +86,32 @@ public class Trip {
 
     @Column(name = "delivery_location", nullable = false, length = 500)
     private String deliveryLocation;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "latitude", column = @Column(name = "pickup_latitude")),
+            @AttributeOverride(name = "longitude", column = @Column(name = "pickup_longitude")),
+            @AttributeOverride(name = "label", column = @Column(name = "pickup_label", length = 120)),
+            @AttributeOverride(name = "address", column = @Column(name = "pickup_address", length = 1000)),
+            @AttributeOverride(name = "source", column = @Column(name = "pickup_coordinate_source", length = 30))
+    })
+    private TripRouteLocation pickupPoint;
+
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "latitude", column = @Column(name = "delivery_latitude")),
+            @AttributeOverride(name = "longitude", column = @Column(name = "delivery_longitude")),
+            @AttributeOverride(name = "label", column = @Column(name = "delivery_label", length = 120)),
+            @AttributeOverride(name = "address", column = @Column(name = "delivery_address", length = 1000)),
+            @AttributeOverride(name = "source", column = @Column(name = "delivery_coordinate_source", length = 30))
+    })
+    private TripRouteLocation deliveryPoint;
+
+    @Column(name = "route_version", nullable = false)
+    private long routeVersion;
+
+    @Column(name = "award_route_snapshot_hash", length = 64)
+    private String awardRouteSnapshotHash;
 
     @Column(name = "agreed_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal agreedPrice;

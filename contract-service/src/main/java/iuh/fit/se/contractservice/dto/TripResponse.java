@@ -14,6 +14,7 @@ public record TripResponse(
         UUID carrierId,
         UUID vehicleId,
         UUID driverId,
+        UUID driverAccountId,
         boolean hasAssignmentPin,
         String auctionId,
         String winningBidId,
@@ -31,7 +32,13 @@ public record TripResponse(
         String cancellationReason,
         Instant createdAt,
         Instant updatedAt,
-        TrackingResponse latestTracking
+        TrackingResponse latestTracking,
+        TripRoutePoint pickupPoint,
+        TripRoutePoint deliveryPoint,
+        long routeVersion,
+        // V3.1: true once the assigned driver signed in (code session or legacy account); no IDs exposed.
+        boolean driverConnected,
+        long assignmentVersion
 ) {
     public static TripResponse from(Trip trip) {
         Instant referenceTime = trip.getDeliveredAt() == null ? Instant.now() : trip.getDeliveredAt();
@@ -51,7 +58,10 @@ public record TripResponse(
                 trip.getCarrierId(),
                 trip.getVehicleId(),
                 trip.getDriverId(),
-                trip.getAssignmentPinHash() != null,
+                trip.getDriverAccountId(),
+                trip.getAssignmentPinHash() != null && trip.getAssignmentPinExpiresAt() != null
+                        && trip.getAssignmentPinExpiresAt().isAfter(Instant.now())
+                        && trip.getAssignmentPinAttempts() < 5,
                 trip.getAuctionId(),
                 trip.getWinningBidId(),
                 trip.getPickupLocation(),
@@ -72,7 +82,12 @@ public record TripResponse(
                         ? null
                         : trip.getTrackingLogs().get(trip.getTrackingLogs().size() - 1) == null
                         ? null
-                        : TrackingResponse.from(trip.getTrackingLogs().get(trip.getTrackingLogs().size() - 1))
+                        : TrackingResponse.from(trip.getTrackingLogs().get(trip.getTrackingLogs().size() - 1)),
+                TripRoutePoint.from(trip.getPickupPoint()),
+                TripRoutePoint.from(trip.getDeliveryPoint()),
+                trip.getRouteVersion(),
+                trip.getDriverSessionId() != null || trip.getDriverAccountId() != null,
+                trip.getAssignmentVersion()
         );
     }
 }
