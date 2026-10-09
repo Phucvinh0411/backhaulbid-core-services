@@ -32,8 +32,12 @@ public class EkycVerification {
     @Column(name = "identity_number", length = 50)
     private String identityNumber;
 
-    @Column(name = "full_name", length = 255)
+    @Column(name = "full_name", length = 2048)
+    @Convert(converter = iuh.fit.se.service.EkycNameConverter.class)
     private String fullName;
+
+    @Column(name = "verification_method", length = 40)
+    private String verificationMethod;
 
     @Column(name = "front_image_url", length = 500)
     private String frontImageUrl;

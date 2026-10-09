@@ -33,14 +33,18 @@ public class InternalWalletService {
 
     /**
      * Freezes the deposit amount. A repeated idempotency key returns the
-     * existing transaction so a network retry cannot freeze money twice.
+     * existing transaction so a network retry cannot freeze money twice. A
+     * zero-balance wallet is created on the first attempt and kept when the
+     * hold is rejected for insufficient funds.
      */
-    @Transactional
+    @Transactional(noRollbackFor = ResponseStatusException.class)
     public InternalWalletOperation hold(UUID accountId, InternalWalletOperationRequest request) {
         Transaction existing = findSuccessfulOrFailed(request.idempotencyKey());
         if (existing != null) return operation(existing, existing.getId());
 
-        Wallet wallet = wallet(accountId);
+        walletRepository.ensureExistsByAccountId(accountId);
+        Wallet wallet = walletRepository.findByAccountIdForUpdate(accountId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet not found"));
         try {
             Transaction transaction = wallet.freeze(request.amount());
             return saveSuccess(wallet, transaction, request, TransactionType.FREEZE, transaction.getId());

@@ -1,5 +1,6 @@
 package iuh.fit.se.domain.entity;
 
+import iuh.fit.se.domain.enums.InsuranceCoverageType;
 import iuh.fit.se.domain.enums.VerificationStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -46,6 +47,28 @@ public class InsuranceInfo {
     @Enumerated(EnumType.STRING)
     @Column(length = 50)
     private VerificationStatus status;
+
+    /** Null for rows entered before cargo-liability certificates existed; those never satisfy a requirement. */
+    @Enumerated(EnumType.STRING)
+    @Column(name = "coverage_type", length = 40)
+    private InsuranceCoverageType coverageType;
+
+    /** Object key of the certificate in the private business-verifications/insurance folder. Never a public URL. */
+    @Column(name = "certificate_key", length = 500)
+    private String certificateKey;
+
+    @Column(name = "submitted_at")
+    private Instant submittedAt;
+
+    /** Admin who reviewed the certificate. Set for both decisions; a row qualifies only when it is VERIFIED. */
+    @Column(name = "verified_by")
+    private UUID verifiedBy;
+
+    @Column(name = "verified_at")
+    private Instant verifiedAt;
+
+    @Column(name = "rejection_reason", length = 500)
+    private String rejectionReason;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

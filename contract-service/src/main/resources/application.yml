@@ -75,3 +75,8 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html
     disable-swagger-default-url: true
+
+app:
+  tracking:
+    # Optional OSRM-compatible provider. Empty keeps pins/GPS/timeline usable.
+    routing-base-url: ${ROUTING_BASE_URL:}

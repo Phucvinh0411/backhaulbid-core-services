@@ -17,6 +17,8 @@ import iuh.fit.se.contractservice.dto.TripLocationResponse;
 import iuh.fit.se.contractservice.dto.CancelLateTripRequest;
 import iuh.fit.se.contractservice.dto.TripDelaySettlementResponse;
 import iuh.fit.se.contractservice.service.TripService;
+import iuh.fit.se.contractservice.service.TripClaimService;
+import iuh.fit.se.contractservice.dto.ClaimTripRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -38,6 +40,27 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TripController {
     private final TripService tripService;
+    private final TripClaimService tripClaimService;
+
+    @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> businessError(
+            org.springframework.web.server.ResponseStatusException exception
+    ) {
+        return org.springframework.http.ResponseEntity.status(exception.getStatusCode()).body(java.util.Map.of(
+                "status", exception.getStatusCode().value(),
+                "message", java.util.Objects.requireNonNullElse(exception.getReason(), "Request could not be completed")
+        ));
+    }
+
+    @PostMapping("/{tripId}/claim")
+    public TripResponse claim(
+            @RequestHeader("X-User-Id") UUID accountId,
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable UUID tripId,
+            @Valid @RequestBody ClaimTripRequest request
+    ) {
+        return TripResponse.from(tripClaimService.claim(accountId, parseRole(role), tripId, request.pin()));
+    }
 
     @GetMapping("/mine")
     public List<TripResponse> listMine(
@@ -97,13 +120,28 @@ public class TripController {
     }
 
     @PatchMapping("/{tripId}/assignment")
-    public TripAssignmentResponse assignDriver(
+    public org.springframework.http.ResponseEntity<TripAssignmentResponse> assignDriver(
             @RequestHeader("X-User-Id") UUID accountId,
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID tripId,
             @Valid @RequestBody AssignDriverRequest request
     ) {
-        return tripService.assignDriver(accountId, parseRole(role), tripId, request);
+        // The response carries the one-time code: never cache it.
+        return org.springframework.http.ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(tripService.assignDriver(accountId, parseRole(role), tripId, request));
+    }
+
+    /** New code for the same driver profile on an active trip; the previous code and session stop working. */
+    @PostMapping("/{tripId}/driver-access/reissue")
+    public org.springframework.http.ResponseEntity<TripAssignmentResponse> reissueDriverAccess(
+            @RequestHeader("X-User-Id") UUID accountId,
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable UUID tripId
+    ) {
+        return org.springframework.http.ResponseEntity.ok()
+                .cacheControl(org.springframework.http.CacheControl.noStore())
+                .body(tripService.reissueDriverAccess(accountId, parseRole(role), tripId));
     }
 
     @PostMapping("/{tripId}/tracking")

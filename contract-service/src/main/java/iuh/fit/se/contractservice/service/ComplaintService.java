@@ -4,6 +4,7 @@ import iuh.fit.se.contractservice.domain.entity.Complaint;
 import iuh.fit.se.contractservice.domain.entity.ComplaintMessage;
 import iuh.fit.se.contractservice.domain.entity.Trip;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
+import iuh.fit.se.contractservice.domain.enums.ComplaintCategory;
 import iuh.fit.se.contractservice.domain.enums.ComplaintStatus;
 import iuh.fit.se.contractservice.dto.AddComplaintMessageRequest;
 import iuh.fit.se.contractservice.dto.ComplaintResponse;
@@ -38,9 +39,32 @@ public class ComplaintService {
 
     @Transactional(readOnly = true)
     public List<ComplaintResponse> list(UUID accountId, AccountRole role) {
-        List<Complaint> complaints = role == AccountRole.ADMIN
-                ? complaintRepository.findAllByOrderByCreatedAtDesc()
-                : complaintRepository.findByReporterIdOrRespondentIdOrderByCreatedAtDesc(accountId, accountId);
+        return list(accountId, role, null);
+    }
+
+    /**
+     * Lists complaints visible to the caller. {@code categoryFilter} is null (no filter),
+     * a {@link ComplaintCategory} code, or {@link ComplaintCategory#UNCATEGORIZED} for legacy rows.
+     * Filtering runs in the database over the caller's full visible set, never on a page slice.
+     */
+    @Transactional(readOnly = true)
+    public List<ComplaintResponse> list(UUID accountId, AccountRole role, String categoryFilter) {
+        boolean admin = role == AccountRole.ADMIN;
+        List<Complaint> complaints;
+        if (categoryFilter == null || categoryFilter.isBlank()) {
+            complaints = admin
+                    ? complaintRepository.findAllByOrderByCreatedAtDesc()
+                    : complaintRepository.findByReporterIdOrRespondentIdOrderByCreatedAtDesc(accountId, accountId);
+        } else if (ComplaintCategory.UNCATEGORIZED.equalsIgnoreCase(categoryFilter.trim())) {
+            complaints = admin
+                    ? complaintRepository.findByCategoryIsNullOrderByCreatedAtDesc()
+                    : complaintRepository.findPartyComplaintsWithoutCategory(accountId);
+        } else {
+            ComplaintCategory category = parseCategory(categoryFilter);
+            complaints = admin
+                    ? complaintRepository.findByCategoryOrderByCreatedAtDesc(category)
+                    : complaintRepository.findPartyComplaintsByCategory(accountId, category);
+        }
         return complaints.stream().map(ComplaintResponse::from).toList();
     }
 
@@ -52,6 +76,13 @@ public class ComplaintService {
     @Transactional
     public ComplaintResponse create(UUID accountId, AccountRole role, CreateComplaintRequest request) {
         requireParty(role);
+        if (request.category() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Complaint category is required");
+        }
+        if (!request.category().allowsReporter(role)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
+                    "Complaint category " + request.category() + " is not available for role " + role);
+        }
         Trip trip = tripRepository.findById(request.tripId())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
         UUID respondentId;
@@ -66,6 +97,7 @@ public class ComplaintService {
                 .tripId(trip.getId())
                 .reporterId(accountId)
                 .respondentId(respondentId)
+                .category(request.category())
                 .title(request.title().trim())
                 .description(request.description().trim())
                 .evidenceUrl(normalizeOptional(request.evidenceUrl()))
@@ -194,6 +226,14 @@ public class ComplaintService {
     private void ensureOpen(Complaint complaint) {
         if (complaint.getStatus() == ComplaintStatus.RESOLVED || complaint.getStatus() == ComplaintStatus.REJECTED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Complaint is already closed");
+        }
+    }
+
+    private ComplaintCategory parseCategory(String value) {
+        try {
+            return ComplaintCategory.valueOf(value.trim().toUpperCase());
+        } catch (IllegalArgumentException exception) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported complaint category");
         }
     }
 

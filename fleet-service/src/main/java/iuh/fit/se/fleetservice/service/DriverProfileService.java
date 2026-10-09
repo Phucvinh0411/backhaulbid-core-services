@@ -20,6 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DriverProfileService {
     private final DriverProfileRepository driverRepository;
+    private final ContractDriverAccessClient driverAccess;
 
     @Transactional(readOnly = true)
     public List<DriverProfile> listMine(UUID carrierId, VerificationStatus status) {
@@ -66,13 +67,16 @@ public class DriverProfileService {
         driver.setLicenseImageUrl(imageUrl);
         if (changed && driver.getStatus() == VerificationStatus.VERIFIED) {
             driver.submitVerification();
+            driverAccess.revokeProfile(driverId, "PROFILE_PENDING");
         }
         return driverRepository.save(driver);
     }
 
     @Transactional
     public void delete(UUID carrierId, UUID driverId) {
-        driverRepository.delete(findOwned(carrierId, driverId));
+        DriverProfile driver = findOwned(carrierId, driverId);
+        driverAccess.revokeProfile(driverId, "PROFILE_DELETED");
+        driverRepository.delete(driver);
     }
 
     @Transactional(readOnly = true)
@@ -90,6 +94,7 @@ public class DriverProfileService {
         if (request.decision() == ReviewDecision.APPROVE) {
             driver.approveBy(adminId);
         } else {
+            driverAccess.revokeProfile(driverId, "PROFILE_REJECTED");
             driver.rejectBy(adminId, request.reason().trim());
         }
         return driverRepository.save(driver);

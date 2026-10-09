@@ -9,6 +9,8 @@ import iuh.fit.se.contractservice.dto.AuctionAwardResponse;
 import iuh.fit.se.contractservice.dto.CreateAuctionAwardRequest;
 import iuh.fit.se.contractservice.repository.ContractRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
+import iuh.fit.se.contractservice.repository.TripTrackingSessionRepository;
+import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,9 +24,13 @@ import java.util.Objects;
 public class AwardedContractService {
     private final TripRepository tripRepository;
     private final ContractRepository contractRepository;
+    private final TripTrackingSessionRepository trackingSessions;
+    private final EntityManager entityManager;
 
     @Transactional
     public AuctionAwardResponse createOrGet(CreateAuctionAwardRequest request) {
+        validatePoint(request.pickupPoint()); validatePoint(request.deliveryPoint());
+        String routeSnapshotHash = RouteSnapshotFingerprint.of(request);
         Trip trip = tripRepository.findByAwardAttemptId(request.awardAttemptId()).orElseGet(() -> {
             Trip newTrip = Trip.builder()
                     .auctionId(request.auctionId())
@@ -35,6 +41,9 @@ public class AwardedContractService {
                     .vehicleId(request.vehicleId())
                     .pickupLocation(request.pickupLocation())
                     .deliveryLocation(request.deliveryLocation())
+                    .pickupPoint(request.pickupPoint() == null ? null : request.pickupPoint().snapshot())
+                    .deliveryPoint(request.deliveryPoint() == null ? null : request.deliveryPoint().snapshot())
+                    .awardRouteSnapshotHash(routeSnapshotHash)
                     .agreedPrice(request.agreedPrice())
                     .expectedDeliveryAt(request.expectedDeliveryAt())
                     .depositHoldId(request.depositHoldId())
@@ -52,7 +61,12 @@ public class AwardedContractService {
                 || trip.getAgreedPrice().compareTo(request.agreedPrice()) != 0
                 || !java.util.Objects.equals(trip.getExpectedDeliveryAt(), request.expectedDeliveryAt())
                 || !java.util.Objects.equals(trip.getDepositHoldId(), request.depositHoldId())
-                || !sameAmount(trip.getDepositAmount(), request.depositAmount())) {
+                || !sameAmount(trip.getDepositAmount(), request.depositAmount())
+                || !Objects.equals(trip.getPickupLocation(), request.pickupLocation())
+                || !Objects.equals(trip.getDeliveryLocation(), request.deliveryLocation())
+                || (trip.getAwardRouteSnapshotHash() != null
+                    ? !trip.getAwardRouteSnapshotHash().equals(routeSnapshotHash)
+                    : hasCoordinates(request.pickupPoint()) || hasCoordinates(request.deliveryPoint()))) {
             throw new IllegalStateException("Auction award was already created with different winner data");
         }
 
@@ -94,6 +108,13 @@ public class AwardedContractService {
                 .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
                         org.springframework.http.HttpStatus.NOT_FOUND, "Award contract not found"));
 
+        // Keep the contract -> trip lock order used by signing. The lookup above may have
+        // loaded an old Trip into this persistence context while another writer held its row.
+        trip = tripRepository.findByIdForUpdate(trip.getId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Auction award trip not found"));
+        entityManager.refresh(trip);
+
         Instant now = Instant.now();
         if ((contract.getStatus() == ContractStatus.DRAFT
                 || contract.getStatus() == ContractStatus.WAITING_SIGNATURE)
@@ -103,6 +124,7 @@ public class AwardedContractService {
             contractRepository.save(contract);
             if (trip.getStatus() != TripStatus.CANCELLED && trip.getStatus() != TripStatus.COMPLETED) {
                 trip.cancel("Hợp đồng hết hạn do không được ký đúng thời hạn");
+                trackingSessions.stopForTrip(trip.getId(), now);
                 tripRepository.save(trip);
             }
         }
@@ -123,5 +145,16 @@ public class AwardedContractService {
 
     private boolean sameAmount(java.math.BigDecimal current, java.math.BigDecimal requested) {
         return current == null ? requested == null : requested != null && current.compareTo(requested) == 0;
+    }
+
+    private void validatePoint(iuh.fit.se.contractservice.dto.TripRoutePoint point) {
+        if (point != null && (!point.isCoordinatePairValid()
+                || (point.source() != null && !point.source().equals("USER_CONFIRMED"))))
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST, "Award route coordinates are invalid");
+    }
+
+    private boolean hasCoordinates(iuh.fit.se.contractservice.dto.TripRoutePoint point) {
+        return point != null && point.latitude() != null;
     }
 }

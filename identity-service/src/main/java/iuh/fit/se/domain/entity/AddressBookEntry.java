@@ -48,6 +48,18 @@ public class AddressBookEntry {
     @Column(nullable = false, length = 500)
     private String detail;
 
+    @Column
+    private Double latitude;
+
+    @Column
+    private Double longitude;
+
+    @Column(name = "coordinate_source", length = 30)
+    private String coordinateSource;
+
+    @Column(name = "coordinate_confirmed_at")
+    private Instant coordinateConfirmedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

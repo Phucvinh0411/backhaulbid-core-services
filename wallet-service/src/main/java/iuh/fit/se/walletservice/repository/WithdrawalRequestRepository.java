@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.UUID;
 
 public interface WithdrawalRequestRepository extends JpaRepository<WithdrawalRequest, UUID> {
+    long countByStatus(WithdrawalStatus status);
     Page<WithdrawalRequest> findByAccountId(UUID accountId, Pageable pageable);
 
     Page<WithdrawalRequest> findByStatus(WithdrawalStatus status, Pageable pageable);

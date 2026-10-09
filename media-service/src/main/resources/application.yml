@@ -22,3 +22,9 @@ aws:
     bucket-name: ${AWS_S3_BUCKET:backhaulbid-media}
     access-key: ${AWS_ACCESS_KEY_ID:mock-key}
     secret-key: ${AWS_SECRET_ACCESS_KEY:mock-secret}
+
+# Driver-session media checks ask contract (V3.1); the token never leaves the backend.
+app:
+  contract:
+    url: ${CONTRACT_SERVICE_URL:http://contract-service:8080}
+  internal-token: ${INTERNAL_SERVICE_TOKEN:}

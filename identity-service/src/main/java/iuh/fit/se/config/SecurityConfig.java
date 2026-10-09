@@ -43,6 +43,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         // Yêu cầu quyền CARRIER cho API companies
                         .requestMatchers("/api/v1/companies/**").hasRole("CARRIER")
+                        // Service-to-service calls carry X-Internal-Token; the controller checks it.
+                        .requestMatchers("/internal/**").permitAll()
                         // Các request khác yêu cầu xác thực
                         .anyRequest().authenticated()
                 )
