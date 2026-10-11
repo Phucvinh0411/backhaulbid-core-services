@@ -23,6 +23,9 @@ public class EkycReviewService {
     private final AccountRepository accounts;
     private final EkycReviewAuditRepository audit;
     private final NativeDecisionPolicy automatic;
+    static final String AUTO_METHOD = "NFC_AUTO";
+    static final String AUTO_REASON = "Tự động chấp nhận: đạt toàn bộ bước kiểm tra NFC và sinh trắc trên thiết bị; dữ liệu chip khớp hash và chữ ký trong hồ sơ. Chưa đối chiếu chuỗi chứng chỉ nguồn cấp CCCD (CSCA).";
+    static final String AUTO_REJECT_REASON = "Chưa đạt đủ bước kiểm tra trên thiết bị. Vui lòng quét lại căn cước gắn chip và làm theo hướng dẫn khuôn mặt.";
     public record Check(String status, String source, String reasonCode) {}
     public record Overview(UUID id, UUID accountId, String status, String verificationMethod,
             NfcIdentitySummary identity, Map<String, Check> checks, Instant submittedAt, Instant reviewedAt,
@@ -39,14 +42,21 @@ public class EkycReviewService {
     /** What the owner sees: status, one short reason, and five identity fields. No checks or evidence lists. */
     public record OwnerSummary(UUID id, String status, String statusReason, Instant submittedAt, Instant reviewedAt,
             OwnerField fullName, OwnerField citizenId, OwnerField dateOfBirth, OwnerField gender,
-            OwnerField residenceAddress, long version) {}
+            long version) {}
     public record QueueItem(UUID id, UUID accountId, String status, Instant submittedAt,
             Instant evidenceExpiresAt, boolean evidenceAvailable, long version) {}
+    /**
+     * The newest eKYC report of an account as the business review shows it: identity fields, status and whether
+     * the images are still held. The images are read through the admin evidence endpoint by {@code reportId}.
+     */
+    public record RepresentativeEkyc(UUID reportId, String status, String verificationMethod, String fullName,
+            String dateOfBirth, String gender, String citizenId, boolean evidenceAvailable,
+            Instant submittedAt, Instant reviewedAt) {}
 
     /** Reports whether encrypted NFC evidence can be stored with the current key. */
     public boolean available() { return cipher.available(); }
 
-    /** Returns the explicitly configured local automatic-decision mode. */
+    /** Returns the configured automatic-acceptance mode. */
     public String automaticMode() { return automatic.mode(); }
 
     /** Returns the latest status for an owner-owned session. */
@@ -82,16 +92,25 @@ public class EkycReviewService {
             var verification=verifications.findByAccount_Id(owner).orElseThrow(this::notFound);
             verification.setStatus(VerificationStatus.VERIFIED);
             verification.setFullName(evidence.summary().fullName());
-            verification.setVerificationMethod("LOCAL_NFC_DEVELOPMENT");
+            verification.setVerificationMethod(AUTO_METHOD);
             verification.setFailureReason(null);
-            // Keep issuer/PAD fields unset: this is local business acceptance, not issuer assurance.
+            // Issuer (CSCA) and server-side face/liveness fields stay unset; AUTO_REASON states that limit.
             verifications.save(verification);
-            row.setStatus("VERIFIED"); row.setVerificationMethod("LOCAL_NFC_DEVELOPMENT");
+            row.setStatus("VERIFIED"); row.setVerificationMethod(AUTO_METHOD);
             row.setReviewedAt(clock.instant()); row.setEvidenceExpiresAt(clock.instant().plus(Duration.ofHours(24)));
-            row.setReviewReason("Tự động chấp nhận nghiệp vụ local theo chính sách " + automatic.mode());
+            row.setReviewReason(AUTO_REASON);
+        } else {
+            // No review queue: a capture that did not pass is rejected now, and the owner scans again.
+            var verification=verifications.findByAccount_Id(owner).orElseThrow(this::notFound);
+            verification.setStatus(VerificationStatus.REJECTED);
+            verification.setFailureReason(AUTO_REJECT_REASON);
+            verifications.save(verification);
+            row.setStatus("REJECTED");
+            row.setReviewedAt(clock.instant()); row.setEvidenceExpiresAt(clock.instant().plus(Duration.ofHours(24)));
+            row.setReviewReason(AUTO_REJECT_REASON);
         }
         reports.save(row);
-        audit(owner, session, "VERIFIED".equals(row.getStatus()) ? "AUTO_LOCAL_ACCEPTED" : "SUBMITTED");
+        audit(owner, session, "VERIFIED".equals(row.getStatus()) ? "AUTO_ACCEPTED" : "AUTO_REJECTED");
     }
 
     /** Returns the small identity summary shown to the submitting account. */
@@ -103,9 +122,9 @@ public class EkycReviewService {
 
     /**
      * Field sources (see docs/v3.1 eKYC table): name, date of birth and sex come from the TD1 MRZ inside DG1
-     * whose hash matched EF.SOD; the 9-character MRZ document number is NOT the 12-digit citizen ID, and
-     * no supported source carries the citizen ID or residence yet (DG13 layout unverified), so both stay
-     * unavailable. Reports stored before this change decode the same way.
+     * whose hash matched EF.SOD. The citizen ID is read by OCR from the front image and is not signed by the chip;
+     * it is unavailable when the upload carried none. The 9-character MRZ document number is NOT the citizen ID.
+     * Residence is not offered: no chip source for it has been confirmed.
      */
     static OwnerSummary ownerSummary(EkycReviewReport row, NfcIdentitySummary identity, boolean reveal) {
         String status = row.getStatus();
@@ -126,8 +145,11 @@ public class EkycReviewService {
         String sex = identity == null ? null : blankToNull(identity.sex());
         OwnerField gender = sex == null || !Set.of("M", "F").contains(sex) ? OwnerField.missing()
                 : new OwnerField(sex, "CHIP_DG1_MRZ", true, false);
+        String number = identity == null ? null : blankToNull(identity.citizenId());
+        OwnerField citizenId = number == null ? OwnerField.missing()
+                : new OwnerField(reveal ? number : null, "DOCUMENT_IMAGE_OCR", true, !reveal);
         return new OwnerSummary(row.getId(), status, reason, row.getSubmittedAt(), row.getReviewedAt(),
-                fullName, OwnerField.missing(), dateOfBirth, gender, OwnerField.missing(), row.getVersion());
+                fullName, citizenId, dateOfBirth, gender, row.getVersion());
     }
     /** Trims review text to the length allowed in the owner's status summary. */
     private static String shortReason(String reason) {
@@ -152,6 +174,21 @@ public class EkycReviewService {
                 new QueueItem(r.getId(), r.getAccountId(), r.getStatus(), r.getSubmittedAt(),
                         r.getEvidenceExpiresAt(), evidenceAvailable(r), r.getVersion()));
     }
+    /** Returns the newest eKYC report of an account for the business review; empty when the account has none. */
+    @Transactional(readOnly = true) public Optional<RepresentativeEkyc> latestRepresentative(UUID accountId) {
+        return reports.findFirstByAccountIdOrderBySubmittedAtDesc(accountId).map(row -> {
+            NfcIdentitySummary identity;
+            try { identity = decode(row); }
+            catch (ResponseStatusException unreadable) { identity = null; }
+            return new RepresentativeEkyc(row.getId(), row.getStatus(), row.getVerificationMethod(),
+                    identity == null ? null : identity.fullName(),
+                    identity == null ? null : identity.dateOfBirth(),
+                    identity == null ? null : identity.sex(),
+                    identity == null ? null : identity.citizenId(),
+                    evidenceAvailable(row), row.getSubmittedAt(), row.getReviewedAt());
+        });
+    }
+
     /** Loads evidence only for the account that submitted the report. */
     @Transactional public byte[] ownerEvidence(UUID owner, UUID id, String part) {
         var row = reports.findById(id).orElseThrow(this::notFound);
@@ -185,7 +222,8 @@ public class EkycReviewService {
         if (approve && !name.equals(identity.fullName())) {
             row.setSummaryEncrypted(encode(row, new NfcIdentitySummary(name, identity.documentNumber(),
                     identity.dateOfBirth(), identity.dateOfExpiry(), identity.sex(), identity.nationality(),
-                    identity.issuingCountry(), "MANUAL_REVIEW_NAME_WITH_SIGNED_DG1_FIELDS")));
+                    identity.issuingCountry(), "MANUAL_REVIEW_NAME_WITH_SIGNED_DG1_FIELDS",
+                    identity.citizenId())));
         }
         var verification = verifications.findByAccount_Id(row.getAccountId()).orElseThrow(this::notFound);
         if (verification.getStatus()==VerificationStatus.VERIFIED)
@@ -210,7 +248,8 @@ public class EkycReviewService {
     private Overview overview(EkycReviewReport row, boolean reveal) {
         var identity = decode(row);
         if (!reveal) identity = new NfcIdentitySummary(identity.fullName(), "•••••" + identity.documentNumber().substring(Math.max(0, identity.documentNumber().length()-4)),
-                "••/••/••••", identity.dateOfExpiry(), identity.sex(), identity.nationality(), identity.issuingCountry(), identity.source());
+                "••/••/••••", identity.dateOfExpiry(), identity.sex(), identity.nationality(), identity.issuingCountry(), identity.source(),
+                identity.citizenId() == null ? null : "•••••••• " + identity.citizenId().substring(identity.citizenId().length() - 4));
         Map<String, Check> checks = new LinkedHashMap<>();
         checks.put("chipIntegrity", new Check("PASS", "SERVER_SOD_PRESENTED_DS", "DG1_DG2_SIGNATURE_AND_HASH_VALID"));
         checks.put("issuerTrust", new Check("UNAVAILABLE", "SERVER", "ISSUER_TRUST_STORE_NOT_CONFIGURED"));

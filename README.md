@@ -115,12 +115,12 @@ docker build --build-arg MODULE=contract-service -t backhaulbid-contract-service
 ```
 *(Hãy thay đổi cấu hình cổng trong application.yml hoặc biến môi trường khi chạy các container để kết nối liên thông trong Docker Network).*
 
-## NFC eKYC — chế độ phát triển local
+## NFC eKYC
 
 Identity-service cung cấp phiên QR dưới `/api/v1/representative-verifications/sessions`. `NFC_EKYC_ENABLED` mặc định tắt. Chủ hàng/Chủ xe ghép phiên với app native bằng cùng tài khoản và xác nhận trên web trước khi app nhận quyền gửi dữ liệu NFC.
 
 Server xác thực chữ ký/hash của dữ liệu chip, kiểm tra định dạng và ngày MRZ, giới hạn ảnh, rồi mã hóa tóm tắt danh tính cùng ảnh bằng khóa cấu hình. Bằng chứng có thời hạn lưu; API owner chỉ trả các trường danh tính cần thiết. Raw DG/SOD/MRZ/APDU không được lưu.
 
-`NFC_LOCAL_AUTOMATIC` mặc định là `DISABLED`. Khi giữ mặc định, hồ sơ không được tự động chấp nhận và cần xử lý theo luồng duyệt identity đã cấu hình. `COMPLETED_ONLY` hoặc `CAPTURE_COMPLETE` chỉ được bật cùng Spring profile `local`; startup bị chặn nếu dùng profile `prod`, `production` hoặc `staging`. Trong chế độ này, server có thể ghi `VERIFIED` với phương thức `LOCAL_NFC_DEVELOPMENT` khi các bước thu thập đạt chính sách đã chọn. Đây là chấp nhận nghiệp vụ dành riêng cho phát triển local; nó **không** chứng minh nguồn cấp chip, đối chiếu khuôn mặt hoặc liveness đã được xác minh độc lập.
+`EKYC_AUTO_ACCEPT` quyết định việc tự động chấp nhận. `DISABLED` giữ mọi hồ sơ trong hàng đợi admin. `COMPLETED_ONLY` tự chấp nhận khi toàn bộ bước NFC và sinh trắc trên thiết bị đều đạt và server xác nhận kết luận `COMPLETED`: server ghi `VERIFIED` với phương thức `NFC_AUTO`, không đưa vào hàng đợi admin. `application.yml` mặc định `DISABLED`; Docker Compose mặc định `COMPLETED_ONLY`. Chế độ này **không** kiểm chuỗi chứng chỉ nguồn cấp CCCD (CSCA), và không đối chiếu khuôn mặt hay liveness trên server; kết quả sinh trắc do thiết bị báo và phụ thuộc model đóng gói trong app.
 
 Các cờ kết quả do client gửi không thay thế quyết định server. Khi rollback, tắt `NFC_EKYC_ENABLED` và khởi động lại identity-service; giữ các migration eKYC đã áp dụng trong rollback thông thường.

@@ -68,7 +68,8 @@ public class EkycCaptureSessionController {
             @RequestHeader("X-Device-Nonce") String device, @RequestHeader("X-Upload-Grant") String grant,
             @RequestHeader("X-Attempt-Id") UUID attempt, @RequestHeader(value="X-Evidence-Consent", required=false) String consent,
             @RequestHeader(value="X-Capture-Report", required=false) String captureReport,
-            @RequestParam MultiValueMap<String, MultipartFile> files) {
+            @RequestParam MultiValueMap<String, MultipartFile> files,
+            @RequestParam(value="citizenIdFromImage", required=false) String citizenIdFromImage) {
         if (!EkycCaptureSessionService.POLICY.equals(consent))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Update the app and consent to verification evidence retention");
         if (!uploads.tryAcquire()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Evidence capacity reached; retry later");
@@ -82,7 +83,8 @@ public class EkycCaptureSessionController {
                 parts.put(name, values.getFirst());
             });
             try (var evidence=verifier.inspect(parts)) {
-                return sessions.accept(owner(auth), id, device, grant, attempt, evidence, observation);
+                return sessions.accept(owner(auth), id, device, grant, attempt,
+                        evidence.withCitizenIdFromImage(citizenIdFromImage), observation);
             }
         } finally { uploads.release(); }
     }

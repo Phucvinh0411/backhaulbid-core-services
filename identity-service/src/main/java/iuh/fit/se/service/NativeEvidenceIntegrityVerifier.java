@@ -21,9 +21,13 @@ import java.util.*;
 @lombok.RequiredArgsConstructor
 public class NativeEvidenceIntegrityVerifier {
     private final java.time.Clock clock;
+    /** Byte limit per part. Every part is required except DG13, which older clients never send. */
     private static final LinkedHashMap<String, Integer> LIMITS = new LinkedHashMap<>();
+    private static final String DG13 = "dg13";
     static {
         LIMITS.put("dg1", 16 * 1024); LIMITS.put("dg2", 2 * 1024 * 1024); LIMITS.put("sod", 256 * 1024);
+        // Matches the SDK read cap (LdsFileLimits.DG13_MAX_ENCODED_BYTES = 128 KiB), so an SDK-accepted DG13 is never rejected here.
+        LIMITS.put(DG13, 128 * 1024);
         LIMITS.put("front", 4 * 1024 * 1024); LIMITS.put("back", 4 * 1024 * 1024); LIMITS.put("selfie", 4 * 1024 * 1024);
     }
 
@@ -32,21 +36,25 @@ public class NativeEvidenceIntegrityVerifier {
         try (var evidence = inspect(parts)) { return evidence.digest(); }
     }
 
-    /** Validates upload structure, card signatures, MRZ fields and image bounds. */
+    /** Validates upload structure, card signatures, MRZ fields, optional DG13 and image bounds. */
     public VerifiedNativeEvidence inspect(Map<String, MultipartFile> parts) {
         Map<String, byte[]> buffers = new LinkedHashMap<>();
         try {
-            if (!parts.keySet().equals(LIMITS.keySet())) throw invalid();
+            Set<String> required = new HashSet<>(LIMITS.keySet());
+            required.remove(DG13);
+            if (!LIMITS.keySet().containsAll(parts.keySet()) || !parts.keySet().containsAll(required)) throw invalid();
             for (var entry : LIMITS.entrySet()) {
                 var part = parts.get(entry.getKey());
+                if (part == null && entry.getKey().equals(DG13)) continue;
                 if (part == null || part.isEmpty() || part.getSize() > entry.getValue()) throw invalid();
                 byte[] bytes;
                 try (InputStream stream = part.getInputStream()) { bytes = stream.readNBytes(entry.getValue() + 1); }
                 buffers.put(entry.getKey(), bytes);
                 if (bytes.length == 0 || bytes.length > entry.getValue()) throw invalid();
             }
-            verifyCard(buffers.get("dg1"), buffers.get("dg2"), buffers.get("sod"));
+            verifyCard(buffers.get("dg1"), buffers.get("dg2"), buffers.get("sod"), buffers.get(DG13));
             NfcIdentitySummary summary = verifyTd1Document(buffers.get("dg1"));
+            // DG13 personal fields are not read; the citizen ID comes from the front-image OCR.
             for (String name : List.of("front", "back", "selfie")) verifyJpeg(buffers.get(name));
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             for (var entry : buffers.entrySet()) {
@@ -61,9 +69,10 @@ public class NativeEvidenceIntegrityVerifier {
         finally { buffers.values().forEach(bytes -> Arrays.fill(bytes, (byte) 0)); }
     }
 
-    /** Verifies the SOD signature and checks DG1/DG2 hashes against its signed contents. */
-    private void verifyCard(byte[] dg1, byte[] dg2, byte[] sod) throws Exception {
+    /** Verifies the SOD signature and checks DG1, DG2 and (when uploaded) DG13 hashes against its signed contents. */
+    private void verifyCard(byte[] dg1, byte[] dg2, byte[] sod, byte[] dg13) throws Exception {
         checkEnvelope(dg1, 0x61); checkEnvelope(dg2, 0x75);
+        if (dg13 != null) checkEnvelope(dg13, 0x6D);
         int sodOffset = checkEnvelope(sod, 0x77);
         byte[] cmsBytes = Arrays.copyOfRange(sod, sodOffset, sod.length);
         byte[] content = null;
@@ -93,6 +102,9 @@ public class NativeEvidenceIntegrityVerifier {
             }
             if (!MessageDigest.isEqual(MessageDigest.getInstance(algorithm).digest(dg1), hashes.getOrDefault(1, new byte[0])) ||
                 !MessageDigest.isEqual(MessageDigest.getInstance(algorithm).digest(dg2), hashes.getOrDefault(2, new byte[0]))) throw invalid();
+            // A DG13 that the signed SOD does not list is never trusted; a listed DG13 that is absent is allowed.
+            if (dg13 != null && (!hashes.containsKey(13) ||
+                    !MessageDigest.isEqual(MessageDigest.getInstance(algorithm).digest(dg13), hashes.get(13)))) throw invalid();
         } finally {
             Arrays.fill(cmsBytes, (byte) 0);
             if (content != null) Arrays.fill(content, (byte) 0);
@@ -148,7 +160,7 @@ public class NativeEvidenceIntegrityVerifier {
             if (birthYear > java.time.LocalDate.now(clock).getYear()) birthYear -= 100;
             var birth = java.time.LocalDate.of(birthYear, numeric(mrz, 32, 2), numeric(mrz, 34, 2));
             return new NfcIdentitySummary(text(mrz, 60, 30), text(mrz, 5, 9), birth.toString(),
-                    expires.toString(), text(mrz, 37, 1), text(mrz, 45, 3), text(mrz, 2, 3), "SIGNED_DG1");
+                    expires.toString(), text(mrz, 37, 1), text(mrz, 45, 3), text(mrz, 2, 3), "SIGNED_DG1", null);
         } finally { if (mrz != null) Arrays.fill(mrz, (byte) 0); }
     }
     /** Converts a fixed-width MRZ field into normalized printable text. */

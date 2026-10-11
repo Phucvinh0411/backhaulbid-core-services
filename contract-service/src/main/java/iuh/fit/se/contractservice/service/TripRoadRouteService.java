@@ -65,7 +65,8 @@ public class TripRoadRouteService {
     private final ObjectMapper json;
     private final RouteGeometryValidator validator;
     private final Clock clock;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    // The public provider's TCP connect is occasionally slower than 2 s; a longer connect limit avoids a 30 s backoff.
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "road-route-fetch");
         thread.setDaemon(true);
@@ -140,11 +141,12 @@ public class TripRoadRouteService {
         try {
             URI url = URI.create(baseUrl + "/route/v1/" + PROFILE + "/" + coordinates(from, to)
                     + "?overview=full&geometries=geojson&steps=false&alternatives=3");
-            var pending = http.sendAsync(HttpRequest.newBuilder(url).timeout(Duration.ofSeconds(4)).GET().build(),
+            // The public provider answers in about 2.5 s with alternatives; the lookup itself never blocks a caller.
+            var pending = http.sendAsync(HttpRequest.newBuilder(url).timeout(Duration.ofSeconds(10)).GET().build(),
                     ignored -> new BoundedBody());
             HttpResponse<byte[]> response;
             try {
-                response = pending.get(5, TimeUnit.SECONDS);
+                response = pending.get(12, TimeUnit.SECONDS);
             } finally {
                 if (!pending.isDone()) pending.cancel(true);
             }

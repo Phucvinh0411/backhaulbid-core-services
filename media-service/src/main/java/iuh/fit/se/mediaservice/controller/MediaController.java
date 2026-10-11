@@ -74,9 +74,12 @@ public class MediaController {
         try {
             MediaService.UploadedObject uploaded = mediaService.uploadFile(file, folder);
             Map<String, String> response = new HashMap<>();
-            // The key is what private readers use; the url is kept so older clients keep working.
+            // The key is what private readers use; the url is kept so older clients keep working, except for folders
+            // that never hand out a storage URL.
             response.put("key", uploaded.key());
-            response.put("url", uploaded.url());
+            if (uploaded.url() != null) {
+                response.put("url", uploaded.url());
+            }
             return ResponseEntity.ok(response);
         } catch (ResponseStatusException refused) {
             throw refused;

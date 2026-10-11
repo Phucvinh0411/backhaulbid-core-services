@@ -69,6 +69,9 @@ public class MediaService {
         try (InputStream content = file.getInputStream()) {
             s3Client.putObject(putObjectRequest, RequestBody.fromInputStream(content, file.getSize()));
         }
+        if (MediaUploadPolicy.returnsKeyOnly(folder)) {
+            return new UploadedObject(key, null);
+        }
         return new UploadedObject(key, "https://" + bucketName + ".s3." + region + ".amazonaws.com/" + key);
     }
 

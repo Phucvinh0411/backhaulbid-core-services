@@ -8,8 +8,13 @@ import jakarta.validation.Valid;
 
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
+/**
+ * The trusted internal award payload. {@code declaredGoodsValue} and {@code valueDocuments} are the auction's snapshot
+ * at this attempt; they are null or empty for an auction that declared none, and for callers that predate them.
+ */
 public record CreateAuctionAwardRequest(
         @NotBlank String auctionId,
         @NotBlank String awardAttemptId,
@@ -25,7 +30,9 @@ public record CreateAuctionAwardRequest(
         @PositiveOrZero BigDecimal depositAmount,
         @NotNull Instant signingDeadlineAt,
         @Valid TripRoutePoint pickupPoint,
-        @Valid TripRoutePoint deliveryPoint
+        @Valid TripRoutePoint deliveryPoint,
+        @PositiveOrZero BigDecimal declaredGoodsValue,
+        @Valid @Size(max = 20) List<CargoValueDocumentRef> valueDocuments
 ) {
     public CreateAuctionAwardRequest(String auctionId, String awardAttemptId, String winningBidId,
             UUID shipperId, UUID carrierId, UUID vehicleId, String pickupLocation, String deliveryLocation,
@@ -33,7 +40,7 @@ public record CreateAuctionAwardRequest(
             Instant signingDeadlineAt) {
         this(auctionId, awardAttemptId, winningBidId, shipperId, carrierId, vehicleId, pickupLocation,
                 deliveryLocation, agreedPrice, expectedDeliveryAt, depositHoldId, depositAmount,
-                signingDeadlineAt, null, null);
+                signingDeadlineAt, null, null, null, null);
     }
     public CreateAuctionAwardRequest(
             String auctionId,
@@ -49,6 +56,6 @@ public record CreateAuctionAwardRequest(
             BigDecimal depositAmount) {
         this(auctionId, auctionId + ":" + winningBidId, winningBidId, shipperId, carrierId,
                 vehicleId, pickupLocation, deliveryLocation, agreedPrice, expectedDeliveryAt,
-                depositHoldId, depositAmount, Instant.now().plusSeconds(86_400), null, null);
+                depositHoldId, depositAmount, Instant.now().plusSeconds(86_400), null, null, null, null);
     }
 }
