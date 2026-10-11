@@ -44,4 +44,8 @@ public class InsuranceClaimEvidence {
 
     @Column(name = "uploaded_at", nullable = false)
     private Instant uploadedAt;
+
+    /** The claim revision this file was added in. The carrier sees only files up to the shared revision. */
+    @Column(name = "revision", nullable = false)
+    private int revision;
 }

@@ -151,6 +151,15 @@ public class TripHandoverService {
     }
 
     /**
+     * The trip's handover record for a claim pack. Internal: the caller has already checked access to the claim, so no
+     * trip role check is repeated here. It is context from before transport, not damage evidence.
+     */
+    @Transactional(readOnly = true)
+    public java.util.Optional<TripHandover> handoverOf(UUID tripId) {
+        return handovers.findByTripId(tripId);
+    }
+
+    /**
      * The object key of one handover photo, after the caller passed the same trip check as for the record. Only the
      * contract service reads the bytes, and only with this key.
      */

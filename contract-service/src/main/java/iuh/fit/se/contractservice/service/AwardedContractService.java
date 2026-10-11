@@ -6,18 +6,26 @@ import iuh.fit.se.contractservice.domain.enums.ContractStatus;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 import iuh.fit.se.contractservice.dto.AuctionAwardAttemptStatusResponse;
 import iuh.fit.se.contractservice.dto.AuctionAwardResponse;
+import iuh.fit.se.contractservice.dto.CargoValueDocumentRef;
 import iuh.fit.se.contractservice.dto.CreateAuctionAwardRequest;
 import iuh.fit.se.contractservice.repository.ContractRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
 import iuh.fit.se.contractservice.repository.TripTrackingSessionRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.Duration;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -26,11 +34,16 @@ public class AwardedContractService {
     private final ContractRepository contractRepository;
     private final TripTrackingSessionRepository trackingSessions;
     private final EntityManager entityManager;
+    private final TripCargoDocumentService cargoDocuments;
 
     @Transactional
     public AuctionAwardResponse createOrGet(CreateAuctionAwardRequest request) {
         validatePoint(request.pickupPoint()); validatePoint(request.deliveryPoint());
+        BigDecimal declaredGoodsValue = request.declaredGoodsValue() == null
+                ? null : request.declaredGoodsValue().setScale(2, RoundingMode.HALF_UP);
+        List<CargoValueDocumentRef> documents = validatedDocuments(request.valueDocuments());
         String routeSnapshotHash = RouteSnapshotFingerprint.of(request);
+        String cargoSnapshotHash = CargoSnapshotFingerprint.of(declaredGoodsValue, documents);
         Trip trip = tripRepository.findByAwardAttemptId(request.awardAttemptId()).orElseGet(() -> {
             Trip newTrip = Trip.builder()
                     .auctionId(request.auctionId())
@@ -44,13 +57,17 @@ public class AwardedContractService {
                     .pickupPoint(request.pickupPoint() == null ? null : request.pickupPoint().snapshot())
                     .deliveryPoint(request.deliveryPoint() == null ? null : request.deliveryPoint().snapshot())
                     .awardRouteSnapshotHash(routeSnapshotHash)
+                    .declaredGoodsValue(declaredGoodsValue)
+                    .cargoSnapshotHash(cargoSnapshotHash)
                     .agreedPrice(request.agreedPrice())
                     .expectedDeliveryAt(request.expectedDeliveryAt())
                     .depositHoldId(request.depositHoldId())
                     .depositAmount(request.depositAmount())
                     .status(TripStatus.WAITING_PICKUP)
                     .build();
-            return tripRepository.save(newTrip);
+            Trip saved = tripRepository.save(newTrip);
+            cargoDocuments.recordAwardSnapshot(saved, documents);
+            return saved;
         });
 
         if (!Objects.equals(trip.getAuctionId(), request.auctionId())
@@ -68,6 +85,9 @@ public class AwardedContractService {
                     ? !trip.getAwardRouteSnapshotHash().equals(routeSnapshotHash)
                     : hasCoordinates(request.pickupPoint()) || hasCoordinates(request.deliveryPoint()))) {
             throw new IllegalStateException("Auction award was already created with different winner data");
+        }
+        if (!cargoSnapshotMatches(trip, cargoSnapshotHash)) {
+            throw new IllegalStateException("Auction award was already created with a different cargo snapshot");
         }
 
         Contract contract = contractRepository.findByTripId(trip.getId()).orElseGet(() -> {
@@ -141,6 +161,33 @@ public class AwardedContractService {
         return new AuctionAwardAttemptStatusResponse(
                 trip.getAuctionId(), trip.getAwardAttemptId(), trip.getId(), contract.getId(),
                 contract.getStatus(), carrierSigned, shipperSigned, contract.getSigningDeadlineAt());
+    }
+
+    /**
+     * A trip created with a snapshot must be retried with the same one. A trip created before snapshots has none
+     * recorded, so only an attempt that carries no cargo matches it.
+     */
+    private boolean cargoSnapshotMatches(Trip trip, String cargoSnapshotHash) {
+        if (trip.getCargoSnapshotHash() != null) {
+            return trip.getCargoSnapshotHash().equals(cargoSnapshotHash);
+        }
+        return CargoSnapshotFingerprint.of(null, List.of()).equals(cargoSnapshotHash);
+    }
+
+    private static List<CargoValueDocumentRef> validatedDocuments(List<CargoValueDocumentRef> documents) {
+        if (documents == null || documents.isEmpty()) return List.of();
+        Set<String> documentIds = new HashSet<>();
+        Set<String> objectKeys = new HashSet<>();
+        for (CargoValueDocumentRef document : documents) {
+            String fileId = CargoObjectKeys.documentIdOf(document.objectKey());
+            if (fileId == null || !fileId.equals(document.documentId()) || document.kind() == null) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chứng từ giá trị hàng của phiên đấu giá không hợp lệ");
+            }
+            if (!documentIds.add(document.documentId()) || !objectKeys.add(document.objectKey())) {
+                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Chứng từ giá trị hàng bị trùng trong phiên đấu giá");
+            }
+        }
+        return List.copyOf(documents);
     }
 
     private boolean sameAmount(java.math.BigDecimal current, java.math.BigDecimal requested) {

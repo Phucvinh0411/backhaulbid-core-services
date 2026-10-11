@@ -113,6 +113,17 @@ public class Trip {
     @Column(name = "award_route_snapshot_hash", length = 64)
     private String awardRouteSnapshotHash;
 
+    /** Declared goods value copied at the award attempt; null for trips created before cargo snapshots. */
+    @Column(name = "declared_goods_value", precision = 19, scale = 2)
+    private BigDecimal declaredGoodsValue;
+
+    /**
+     * Fingerprint of the cargo snapshot the trip was created with. A retry of the same award attempt must match it.
+     * Null for trips created before cargo snapshots; those accept only an attempt that carries no cargo.
+     */
+    @Column(name = "cargo_snapshot_hash", length = 64)
+    private String cargoSnapshotHash;
+
     @Column(name = "agreed_price", nullable = false, precision = 19, scale = 2)
     private BigDecimal agreedPrice;
 
