@@ -5,6 +5,7 @@ import iuh.fit.se.mediaservice.service.MediaService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.InputStreamResource;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -20,9 +21,9 @@ import java.security.MessageDigest;
 import java.util.regex.Pattern;
 
 /**
- * Service-to-service read of a private object: claim evidence, handover photos and carrier cargo-liability
- * certificates. Not routed by the gateway. The caller must hold the shared internal token and must already have
- * checked the owner of the trip, the claim or the admin review.
+ * Service-to-service read of a private object: claim evidence, handover photos, the shipper's goods-value documents
+ * and carrier cargo-liability certificates. Not routed by the gateway. The caller must hold the shared internal token
+ * and must already have checked the owner of the trip, the claim, the auction or the admin review.
  */
 @RestController
 @RequestMapping("/internal/media")
@@ -32,6 +33,8 @@ public class InternalMediaController {
             "^handover-photos/" + UUID + "\\.(png|jpe?g|webp|gif)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PRIVATE_EVIDENCE_KEY = Pattern.compile(
             "^claim-evidence/" + UUID + "\\.(png|jpe?g|webp|gif|pdf)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern PRIVATE_VALUE_DOCUMENT_KEY = Pattern.compile(
+            "^goods-value-docs/" + UUID + "\\.(png|jpe?g|webp|gif|pdf)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PRIVATE_CERTIFICATE_KEY = Pattern.compile(
             "^business-verifications/insurance/" + UUID + "\\.(png|jpe?g|webp|gif|pdf)$", Pattern.CASE_INSENSITIVE);
 
@@ -47,8 +50,7 @@ public class InternalMediaController {
     public ResponseEntity<InputStreamResource> object(@RequestHeader(value = "X-Internal-Token", required = false) String token,
                                                       @RequestParam("key") String key) {
         authorize(token);
-        if (key == null || !(PRIVATE_IMAGE_KEY.matcher(key).matches() || PRIVATE_EVIDENCE_KEY.matcher(key).matches()
-                || PRIVATE_CERTIFICATE_KEY.matcher(key).matches())) {
+        if (!isPrivateObjectKey(key)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Object not found");
         }
         String fileName = key.substring(key.lastIndexOf('/') + 1);
@@ -58,7 +60,14 @@ public class InternalMediaController {
                 .contentType(MediaType.parseMediaType(contentType))
                 .cacheControl(CacheControl.noStore())
                 .header("X-Content-Type-Options", "nosniff")
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(new InputStreamResource(object));
+    }
+
+    /** Only the exact private folders and file-name shapes; a folder prefix or a traversal never matches. */
+    static boolean isPrivateObjectKey(String key) {
+        return key != null && (PRIVATE_IMAGE_KEY.matcher(key).matches() || PRIVATE_EVIDENCE_KEY.matcher(key).matches()
+                || PRIVATE_VALUE_DOCUMENT_KEY.matcher(key).matches() || PRIVATE_CERTIFICATE_KEY.matcher(key).matches());
     }
 
     private void authorize(String token) {
