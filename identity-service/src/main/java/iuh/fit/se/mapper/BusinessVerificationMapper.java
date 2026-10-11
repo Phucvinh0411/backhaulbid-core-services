@@ -19,6 +19,8 @@ public interface BusinessVerificationMapper {
     @Mapping(target = "contactEmail", source = "account.email")
     @Mapping(target = "contactPhone", source = "account.phone")
     @Mapping(target = "status", source = "verificationStatus", qualifiedByName = "verificationStatus")
+    // The owner's eKYC report is attached by CompanyVerificationService for the admin review only.
+    @Mapping(target = "ekycRepresentative", ignore = true)
     BusinessVerificationResponse toResponse(Company company);
 
     default BusinessVerificationResponse notSubmitted() {

@@ -34,6 +34,7 @@ public class CompanyVerificationService {
     private final BusinessVerificationService businessVerificationService;
     private final BusinessVerificationMapper businessVerificationMapper;
     private final EkycVerificationRepository ekycVerificationRepository;
+    private final EkycReviewService ekycReviews;
 
     @Transactional
     public BusinessVerificationResponse submit(
@@ -138,7 +139,8 @@ public class CompanyVerificationService {
                         Sort.by(Sort.Direction.ASC, "companyName")));
         return BusinessVerificationPageResponse.builder()
                 .items(companies.getContent().stream()
-                        .map(businessVerificationMapper::toResponse)
+                        .map(company -> withRepresentativeEkyc(
+                                businessVerificationMapper.toResponse(company), company))
                         .toList())
                 .page(page)
                 .pageSize(pageSize)
@@ -174,10 +176,15 @@ public class CompanyVerificationService {
                     "Quyết định phải là APPROVE hoặc REJECT");
         }
 
-        return businessVerificationMapper.toResponse(companyRepository.save(company));
+        return withRepresentativeEkyc(businessVerificationMapper.toResponse(companyRepository.save(company)), company);
     }
 
-
+    /** Attaches the owner's newest eKYC report for the admin review. Owner-facing responses never carry it. */
+    private BusinessVerificationResponse withRepresentativeEkyc(BusinessVerificationResponse response, Company company) {
+        response.setEkycRepresentative(
+                ekycReviews.latestRepresentative(company.getAccount().getId()).orElse(null));
+        return response;
+    }
 
     private String limitLength(String value, int maximumLength) {
         if (value == null || value.length() <= maximumLength) {

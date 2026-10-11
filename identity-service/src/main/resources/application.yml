@@ -57,7 +57,9 @@ app:
   ekyc:
     nfc-enabled: ${NFC_EKYC_ENABLED:false}
     evidence-key: ${EKYC_EVIDENCE_ENCRYPTION_KEY:}
-    local-automatic: ${NFC_LOCAL_AUTOMATIC:DISABLED}
+    auto-accept: ${EKYC_AUTO_ACCEPT:DISABLED}
+    # Literal on purpose (no env var): only the local profile file turns this on.
+    development-pass-accepted: false
   jwt:
     secret: ${JWT_SECRET}
   # Driver code sign-in (V3.1): contract owns assignments; the replay key never leaves the backend.
@@ -67,6 +69,10 @@ app:
   media:
     url: ${MEDIA_SERVICE_URL:http://media-service:8080}
   internal-token: ${INTERNAL_SERVICE_TOKEN:}
+  # Company lookup by tax code (xinvoice.vn). Both values are sent as headers and are never logged.
+  business-lookup:
+    client-id: ${BUSINESS_LOOKUP_CLIENT_ID:}
+    api-key: ${BUSINESS_LOOKUP_API_KEY:}
   driver:
     replay-key: ${DRIVER_REPLAY_KEY:}
 

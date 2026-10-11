@@ -30,5 +30,7 @@ public class BusinessVerificationResponse {
     private String businessLicenseFilename;
     private String authorizationLetterFilename;
     private String rejectionReason;
+    /** Admin review only: the owner's newest eKYC report. Null in owner-facing responses. */
+    private iuh.fit.se.service.EkycReviewService.RepresentativeEkyc ekycRepresentative;
 
 }

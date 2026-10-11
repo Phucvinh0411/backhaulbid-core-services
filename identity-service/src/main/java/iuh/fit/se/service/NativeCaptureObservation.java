@@ -32,9 +32,16 @@ public record NativeCaptureObservation(UUID sessionId, UUID attemptId, String po
         finally { if (bytes!=null) Arrays.fill(bytes,(byte)0); }
     }
     /** Derives the capture conclusion from the individual check outcomes. */
-    public String derivedConclusion() {
+    public String derivedConclusion() { return derivedConclusion(false); }
+
+    /**
+     * Same rule with an explicit choice for development-model biometrics. Only the local development profile may pass
+     * true; by default DEVELOPMENT_PASS never completes a capture.
+     */
+    public String derivedConclusion(boolean developmentPassCounts) {
+        Set<String> biometricPass = developmentPassCounts ? Set.of("PASS","DEVELOPMENT_PASS") : Set.of("PASS");
         boolean ready="PASS".equals(checks.get("documentReadiness")), nfc="PASS".equals(checks.get("nfcRead"));
-        boolean biometric=List.of("activeLiveness","passiveLiveness","faceMatch").stream().allMatch(k -> "PASS".equals(checks.get(k)));
+        boolean biometric=List.of("activeLiveness","passiveLiveness","faceMatch").stream().allMatch(k -> biometricPass.contains(checks.get(k)));
         if (ready && nfc && biometric) return "COMPLETED";
         if ("FAIL".equals(checks.get("nfcRead"))) return "FAILED_STAGE";
         if (!ready || "NOT_RUN".equals(checks.get("nfcRead"))) return "INCOMPLETE";
