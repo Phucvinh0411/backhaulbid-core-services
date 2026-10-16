@@ -60,6 +60,30 @@ public class InsuranceClaim {
     @Column(name = "provider_reference", length = 80)
     private String providerReference;
 
+    /** Goes up by one for each evidence file added after the claim was first shared. */
+    @Column(name = "revision", nullable = false)
+    private int revision;
+
+    /** The revision the shipper last shared with the carrier; null until the first share. Never overwritten. */
+    @Column(name = "shared_revision")
+    private Integer sharedRevision;
+
+    @Column(name = "shared_at")
+    private Instant sharedAt;
+
+    @Column(name = "shared_by")
+    private UUID sharedBy;
+
+    /** The shared revision the carrier confirmed receiving. Only receipt; not a provider decision. */
+    @Column(name = "carrier_acknowledged_revision")
+    private Integer carrierAcknowledgedRevision;
+
+    @Column(name = "carrier_acknowledged_at")
+    private Instant carrierAcknowledgedAt;
+
+    @Column(name = "carrier_acknowledged_by")
+    private UUID carrierAcknowledgedBy;
+
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
