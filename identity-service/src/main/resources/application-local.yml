@@ -1,0 +1,4 @@
+# Local development profile only (IDENTITY_SPRING_PROFILES_ACTIVE=local). Production never activates this profile.
+app:
+  ekyc:
+    development-pass-accepted: true

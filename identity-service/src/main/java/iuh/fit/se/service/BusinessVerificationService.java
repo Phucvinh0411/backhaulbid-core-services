@@ -3,6 +3,7 @@ package iuh.fit.se.service;
 import iuh.fit.se.dto.BusinessLookupResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -14,91 +15,72 @@ import org.springframework.web.client.HttpClientErrorException;
 
 import java.time.Duration;
 import java.util.Map;
-import java.util.List;
 
+/**
+ * Tra cứu doanh nghiệp theo mã số thuế qua xinvoice.vn (GET /gdt-api/tax-payer/{taxCode}).
+ * The provider returns no legal representative, so the representative is never matched here: every
+ * submission must then carry a signed authorization letter.
+ */
 @Service
 @Slf4j
 public class BusinessVerificationService {
 
-    private static final String DOANHNGHIEP_API = "https://doanhnghiep.vn/api/v1/companies/";
+    private static final String XINVOICE_API = "https://api.xinvoice.vn/gdt-api/tax-payer/";
 
     private final RestTemplate restTemplate;
+    /** Both values are sent as headers only; they are never put in the URL or logged. */
+    private final String clientId;
+    private final String apiKey;
 
     @Autowired
-    public BusinessVerificationService(RestTemplateBuilder restTemplateBuilder) {
+    public BusinessVerificationService(RestTemplateBuilder restTemplateBuilder,
+            @Value("${app.business-lookup.client-id:}") String clientId,
+            @Value("${app.business-lookup.api-key:}") String apiKey) {
         this(restTemplateBuilder
                 .setConnectTimeout(Duration.ofSeconds(5))
                 .setReadTimeout(Duration.ofSeconds(10))
-                .build());
+                .build(), clientId, apiKey);
     }
 
-    BusinessVerificationService(RestTemplate restTemplate) {
+    BusinessVerificationService(RestTemplate restTemplate, String clientId, String apiKey) {
         this.restTemplate = restTemplate;
+        this.clientId = clientId == null ? "" : clientId.trim();
+        this.apiKey = apiKey == null ? "" : apiKey.trim();
     }
 
-    /**
-     * Tra cứu thông tin doanh nghiệp qua Mã số thuế bằng API doanhnghiep.vn
-     * API này trả về được cả người đại diện pháp luật!
-     */
-    @SuppressWarnings("unchecked")
+    /** Looks up a company by tax code. A provider failure is reported as unavailable, never as a verdict. */
     public BusinessLookupResponse lookupByTaxCode(String taxCode) {
         try {
-            String url = DOANHNGHIEP_API + taxCode.trim();
-            log.info("Tra cứu MST: {} via doanhnghiep.vn API", taxCode);
+            String url = XINVOICE_API + taxCode.trim();
+            log.info("Tra cứu MST: {} via xinvoice API", taxCode);
 
             HttpHeaders headers = new HttpHeaders();
-            headers.set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
             headers.set("Accept", "application/json");
+            // xinvoice answers without credentials today; the optional headers are sent only when configured.
+            if (!clientId.isEmpty()) headers.set("client-id", clientId);
+            if (!apiKey.isEmpty()) headers.set("api-key", apiKey);
             HttpEntity<String> entity = new HttpEntity<>(headers);
 
             ResponseEntity<Map> response = restTemplate.exchange(url, HttpMethod.GET, entity, Map.class);
-            Map<String, Object> body = response.getBody();
-
-            if (body == null) {
+            Map<String, Object> record = response.getBody();
+            if (record == null || record.isEmpty()) {
                 return buildNotFound(taxCode);
             }
 
-            // Có thể trả về object trực tiếp hoặc bọc trong "data"
-            Object dataObj = body.containsKey("data") ? body.get("data") : body;
-            Map<String, Object> record = null;
+            String name = getStringValue(record, "name");
+            String address = getStringValue(record, "address");
+            String status = getStringValue(record, "status");
 
-            if (dataObj instanceof List) {
-                List<Map<String, Object>> list = (List<Map<String, Object>>) dataObj;
-                if (!list.isEmpty()) {
-                    record = list.get(0);
-                }
-            } else if (dataObj instanceof Map) {
-                record = (Map<String, Object>) dataObj;
-            }
-
-            if (record == null) {
-                return buildNotFound(taxCode);
-            }
-
-            String name = getStringValue(
-                    record, "name_vi", "name", "tenDN", "company_name", "title", "Title");
-            String address = getStringValue(
-                    record, "address_full", "address", "diaChi", "DiaChiDN");
-            String status = getStringValue(record, "status", "trangThai", "TrangThai", "tinh_trang");
-            String representative = getStringValue(
-                    record, "legal_rep_name", "representative", "nguoiDaiDien",
-                    "NguoiDaiDien", "dai_dien", "director", "Director");
-
-            // Kiểm tra trạng thái hoạt động (Nếu không có, mặc định coi là Đang hoạt động)
-            if (status == null || status.isEmpty()) {
-                status = "Đang hoạt động";
-            }
-
-
-            boolean active = "active".equalsIgnoreCase(status)
-                    || status.toLowerCase().contains("đang hoạt động");
+            // A missing status is not treated as active: the company must show an active status to pass.
+            boolean active = status != null && (
+                    "active".equalsIgnoreCase(status) || status.toLowerCase().contains("đang hoạt động"));
             boolean valid = name != null && !name.isEmpty() && active;
 
             return BusinessLookupResponse.builder()
                     .taxCode(taxCode)
                     .companyName(name != null ? name : "Không tìm thấy")
                     .address(address != null ? address : "")
-                    .representative(representative != null ? representative : "")
+                    .representative("")
                     .status(status != null ? status : "Không xác định")
                     .valid(valid)
                     .message(valid
@@ -129,16 +111,8 @@ public class BusinessVerificationService {
                 .build();
     }
 
-    /**
-     * Lấy giá trị string từ Map, thử nhiều key khác nhau (vì API có thể đổi format)
-     */
-    private String getStringValue(Map<String, Object> map, String... keys) {
-        for (String key : keys) {
-            Object val = map.get(key);
-            if (val != null && !val.toString().isEmpty()) {
-                return val.toString();
-            }
-        }
-        return null;
+    private String getStringValue(Map<String, Object> map, String key) {
+        Object val = map.get(key);
+        return val != null && !val.toString().isEmpty() ? val.toString() : null;
     }
 }
