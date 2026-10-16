@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.se.contractservice.dto.TripRoutePoint;
 import iuh.fit.se.contractservice.service.routing.CountryBoundaries;
 import iuh.fit.se.contractservice.service.routing.RouteGeometryValidator;
+import iuh.fit.se.contractservice.service.routing.VietnamCorridor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -52,7 +53,7 @@ public class TripRoadRouteService {
     /** OSRM profile in use. The public demo only offers car routing, not truck restrictions. */
     static final String PROFILE = "driving";
     /** Bump when validation or simplification rules change so old cached routes are not reused. */
-    static final String POLICY = "v2-dp15m-border2km";
+    static final String POLICY = "v3-dp15m-border2km-ql1a";
     static final int MAX_BODY_BYTES = 4 * 1024 * 1024;
     private static final Duration READY_TTL = Duration.ofHours(6);
     private static final Duration NO_ROUTE_TTL = Duration.ofHours(1);
@@ -130,7 +131,6 @@ public class TripRoadRouteService {
     }
 
     void fetch(String key, TripRoutePoint from, TripRoutePoint to) {
-        pace();
         Entry previous;
         synchronized (cache) {
             previous = cache.get(key);
@@ -138,42 +138,83 @@ public class TripRoadRouteService {
         int failures = previous == null ? 0 : previous.failures();
         Instant now = clock.instant();
         try {
-            URI url = URI.create(baseUrl + "/route/v1/" + PROFILE + "/" + coordinates(from, to)
-                    + "?overview=full&geometries=geojson&steps=false&alternatives=3");
-            var pending = http.sendAsync(HttpRequest.newBuilder(url).timeout(Duration.ofSeconds(4)).GET().build(),
-                    ignored -> new BoundedBody());
-            HttpResponse<byte[]> response;
-            try {
-                response = pending.get(5, TimeUnit.SECONDS);
-            } finally {
-                if (!pending.isDone()) pending.cancel(true);
-            }
-            if (response.statusCode() == 429) {
-                Duration wait = retryAfter(response).orElse(backoff(failures));
-                store(key, unavailable(previous, "RATE_LIMITED"), null, now.plus(wait), failures + 1);
-                return;
-            }
-            if (response.statusCode() >= 500) {
-                store(key, unavailable(previous, "PROVIDER_ERROR"), null, now.plus(backoff(failures)), failures + 1);
-                return;
-            }
-            JsonNode body = json.readTree(response.body());
+            // The public provider answers in about 2.5 s with alternatives; the lookup itself never blocks a caller.
+            JsonNode body = request(coordinates(from, to), 3);
             String code = body.path("code").asText();
             if ("NoRoute".equals(code) || "NoSegment".equals(code)) {
                 store(key, new RouteResult(Status.NO_ROUTE, null, meta(code, null)), now.plus(NO_ROUTE_TTL), null, 0);
                 return;
             }
-            if (!"Ok".equals(code)) {
-                store(key, unavailable(previous, "PROVIDER_" + code.toUpperCase(Locale.ROOT)), null, now.plus(backoff(failures)), failures + 1);
-                return;
-            }
-            store(key, choose(body, from, to), now.plus(READY_TTL), null, 0);
+            RouteResult result = choose(body, from, to);
+            if (crossesBorder(result)) result = viaCorridor(from, to, result);
+            store(key, result, now.plus(READY_TTL), null, 0);
+        } catch (ProviderFailure failure) {
+            Duration wait = failure.retryAfter() != null ? failure.retryAfter() : backoff(failures);
+            store(key, unavailable(previous, failure.getMessage()), null, now.plus(wait), failures + 1);
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
         } catch (Exception unavailable) {
             // Timeout, connection failure or oversized body: tracking keeps working with pins only.
             store(key, unavailable(previous, "UNREACHABLE"), null, now.plus(backoff(failures)), failures + 1);
         }
+    }
+
+    /** Provider refused or failed; the reason is stored and the fetch is retried after a backoff. */
+    static final class ProviderFailure extends Exception {
+        private final Duration retryAfter;
+
+        ProviderFailure(String reason, Duration retryAfter) {
+            super(reason, null, false, false);
+            this.retryAfter = retryAfter;
+        }
+
+        Duration retryAfter() {
+            return retryAfter;
+        }
+    }
+
+    /** One paced provider call. Returns the body when the code is Ok, NoRoute or NoSegment. */
+    JsonNode request(String coordinates, int alternatives) throws Exception {
+        pace();
+        URI url = URI.create(baseUrl + "/route/v1/" + PROFILE + "/" + coordinates
+                + "?overview=full&geometries=geojson&steps=false&alternatives=" + (alternatives > 0 ? alternatives : "false"));
+        var pending = http.sendAsync(HttpRequest.newBuilder(url).timeout(Duration.ofSeconds(10)).GET().build(),
+                ignored -> new BoundedBody());
+        HttpResponse<byte[]> response;
+        try {
+            response = pending.get(12, TimeUnit.SECONDS);
+        } finally {
+            if (!pending.isDone()) pending.cancel(true);
+        }
+        if (response.statusCode() == 429) throw new ProviderFailure("RATE_LIMITED", retryAfter(response).orElse(null));
+        if (response.statusCode() >= 500) throw new ProviderFailure("PROVIDER_ERROR", null);
+        JsonNode body = json.readTree(response.body());
+        String code = body.path("code").asText();
+        if (!"Ok".equals(code) && !"NoRoute".equals(code) && !"NoSegment".equals(code)) {
+            throw new ProviderFailure("PROVIDER_" + code.toUpperCase(Locale.ROOT), null);
+        }
+        return body;
+    }
+
+    static boolean crossesBorder(RouteResult result) {
+        return result.status() == Status.REJECTED
+                && String.valueOf(result.meta().get("reason")).startsWith("CROSSES_BORDER_");
+    }
+
+    /**
+     * Second try through QL1A via points when every alternative left Vietnam. Keeps the first rejection when there
+     * are no via points or the corridor road is not accepted either.
+     */
+    RouteResult viaCorridor(TripRoutePoint from, TripRoutePoint to, RouteResult rejected) throws Exception {
+        List<double[]> via = VietnamCorridor.between(new double[]{from.longitude(), from.latitude()},
+                new double[]{to.longitude(), to.latitude()});
+        if (via.isEmpty()) return rejected;
+        JsonNode body = request(coordinates(from, via, to), 0);
+        if (!"Ok".equals(body.path("code").asText())) return rejected;
+        RouteResult corridor = choose(body, from, to);
+        if (corridor.status() != Status.READY) return rejected;
+        corridor.meta().put("via", "QL1A");
+        return corridor;
     }
 
     /** First provider alternative that passes validation; otherwise the first rejection reason. */
@@ -269,7 +310,13 @@ public class TripRoadRouteService {
     }
 
     private static String coordinates(TripRoutePoint from, TripRoutePoint to) {
-        return String.format(Locale.ROOT, "%.6f,%.6f;%.6f,%.6f", from.longitude(), from.latitude(), to.longitude(), to.latitude());
+        return coordinates(from, List.of(), to);
+    }
+
+    private static String coordinates(TripRoutePoint from, List<double[]> via, TripRoutePoint to) {
+        StringBuilder path = new StringBuilder(String.format(Locale.ROOT, "%.6f,%.6f", from.longitude(), from.latitude()));
+        for (double[] point : via) path.append(String.format(Locale.ROOT, ";%.6f,%.6f", point[0], point[1]));
+        return path.append(String.format(Locale.ROOT, ";%.6f,%.6f", to.longitude(), to.latitude())).toString();
     }
 
     static final class BoundedBody implements HttpResponse.BodySubscriber<byte[]> {
