@@ -66,7 +66,8 @@ public class TripRoadRouteService {
     private final ObjectMapper json;
     private final RouteGeometryValidator validator;
     private final Clock clock;
-    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).build();
+    // The public provider's TCP connect is occasionally slower than 2 s; a longer connect limit avoids a 30 s backoff.
+    private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8)).build();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(runnable -> {
         Thread thread = new Thread(runnable, "road-route-fetch");
         thread.setDaemon(true);
