@@ -18,6 +18,9 @@ public final class MediaUploadPolicy {
             "goods-value-docs", "uploads", "business-verifications/licenses", "business-verifications/authorization",
             "business-verifications/insurance", "vehicles/registration", "vehicles/inspection", "drivers/license");
 
+    /** Folders whose upload answer carries the object key only: no storage URL is ever handed out for them. */
+    private static final Set<String> KEY_ONLY_FOLDERS = Set.of("goods-value-docs");
+
     private static final Set<String> DOCUMENT_FOLDERS = Set.of(
             "complaints", "claim-evidence", "goods-value-docs", "uploads", "business-verifications/licenses",
             "business-verifications/authorization", "business-verifications/insurance", "vehicles/registration",
@@ -52,6 +55,11 @@ public final class MediaUploadPolicy {
 
     public static boolean isUploadFolder(String folder) {
         return folder != null && UPLOAD_FOLDERS.contains(folder);
+    }
+
+    /** Whether the upload answer for this folder omits the storage URL and returns only the object key. */
+    public static boolean returnsKeyOnly(String folder) {
+        return folder != null && KEY_ONLY_FOLDERS.contains(folder);
     }
 
     /** The real type from the leading bytes, or null when the bytes match no accepted type. */
