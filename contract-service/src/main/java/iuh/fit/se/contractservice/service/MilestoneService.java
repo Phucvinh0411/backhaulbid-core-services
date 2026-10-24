@@ -31,8 +31,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class MilestoneService {
 
-    /** Bán kính geo-fence cho phép tài xế check-in (km). */
-    private static final double GEO_FENCE_RADIUS_KM = 2.0;
+    /** Bán kính geo-fence cho phép tài xế check-in (km) - Tối đa 1.0 km theo quy định. */
+    private static final double GEO_FENCE_RADIUS_KM = 1.0;
 
     private static final String EXCHANGE    = "contract.events";
     private static final String ROUTING_KEY = "trip.milestone.reached";
@@ -131,7 +131,7 @@ public class MilestoneService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     String.format(
                             "Vị trí không hợp lệ. Bạn đang ở quá xa cột mốc! " +
-                            "(Khoảng cách hiện tại: %.2f km, cho phép: %.1f km)",
+                            "(Khoảng cách hiện tại: %.2f km, bán kính check-in cho phép: %.1f km)",
                             distanceKm, GEO_FENCE_RADIUS_KM));
         }
 
