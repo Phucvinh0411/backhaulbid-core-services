@@ -75,6 +75,17 @@ public class EmptyRouteService {
         return emptyRouteRepository.findByCompanyIdOrderByExpectedEmptyTimeAsc(ownerCompanyId);
     }
 
+    @Transactional
+    public void cancelEmptyRoute(UUID routeId, String companyId) {
+        EmptyRoute route = emptyRouteRepository.findById(routeId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy chuyến xe rỗng"));
+        if (!companyId.equalsIgnoreCase(route.getCompanyId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Bạn không có quyền hủy chuyến xe rỗng này");
+        }
+        route.setStatus(EmptyRouteStatus.CANCELLED);
+        emptyRouteRepository.save(route);
+    }
+
     // ══════════════════════════════════════════════════════════════════
     //  Tìm xe rỗng phù hợp với một phiên đấu giá – dựa trên tọa độ + GIS
     // ══════════════════════════════════════════════════════════════════

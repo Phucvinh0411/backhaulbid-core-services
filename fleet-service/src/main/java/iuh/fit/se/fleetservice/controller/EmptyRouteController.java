@@ -40,6 +40,17 @@ public class EmptyRouteController {
         return ResponseEntity.status(HttpStatus.CREATED).body(emptyRoute);
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> cancelRoute(
+            @PathVariable UUID id,
+            @RequestHeader("X-User-Id") UUID carrierId,
+            @RequestHeader("X-User-Role") String role
+    ) {
+        requireCarrier(role);
+        emptyRouteService.cancelEmptyRoute(id, carrierId.toString());
+        return ResponseEntity.noContent().build();
+    }
+
     private void requireCarrier(String role) {
         if (!"CARRIER".equalsIgnoreCase(role)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier role required");
