@@ -28,9 +28,6 @@ public class TripLocationUpdate {
     @Column(name = "actor_role", length = 20)
     private iuh.fit.se.contractservice.domain.enums.AccountRole actorRole;
 
-    @Column(name = "milestone_id")
-    private UUID milestoneId;
-
     @Column(name = "actor_id", nullable = false)
     private UUID actorId;
 

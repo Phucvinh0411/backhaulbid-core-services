@@ -12,8 +12,8 @@ import org.springframework.context.annotation.Configuration;
 public class RabbitMQConfig {
 
     public static final String CONTRACT_EXCHANGE  = "contract.events";
-    public static final String MILESTONE_QUEUE    = "trip.milestone.reached.queue";
-    public static final String MILESTONE_ROUTING  = "trip.milestone.reached";
+    public static final String LOCATION_QUEUE     = "trip.location.updated.queue";
+    public static final String LOCATION_ROUTING   = "trip.location.updated";
 
     @Bean
     public TopicExchange contractEventsExchange() {
@@ -21,17 +21,17 @@ public class RabbitMQConfig {
     }
 
     @Bean
-    public Queue milestoneReachedQueue() {
-        return QueueBuilder.durable(MILESTONE_QUEUE).build();
+    public Queue tripLocationUpdatedQueue() {
+        return QueueBuilder.durable(LOCATION_QUEUE).build();
     }
 
     @Bean
-    public Binding milestoneBinding(Queue milestoneReachedQueue,
-                                    TopicExchange contractEventsExchange) {
+    public Binding tripLocationBinding(Queue tripLocationUpdatedQueue,
+                                       TopicExchange contractEventsExchange) {
         return BindingBuilder
-                .bind(milestoneReachedQueue)
+                .bind(tripLocationUpdatedQueue)
                 .to(contractEventsExchange)
-                .with(MILESTONE_ROUTING);
+                .with(LOCATION_ROUTING);
     }
 
     /** Đảm bảo RabbitTemplate gửi message dạng JSON. */

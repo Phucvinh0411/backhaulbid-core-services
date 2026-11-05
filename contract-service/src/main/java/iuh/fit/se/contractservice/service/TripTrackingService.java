@@ -24,6 +24,7 @@ public class TripTrackingService {
     private final Clock clock;
     private final TripRoadRouteService roads;
     private final DriverAccessPolicy driverAccess;
+    private final TripLocationEventPublisher locationPublisher;
     /** driverAccountId for a legacy account driver, driverSessionId for a code-login session; never both. */
     public record Session(UUID id, UUID tripId, UUID driverAccountId, UUID driverSessionId, String status,
             Instant startedAt, Instant endedAt, Instant lastReceivedAt) {
@@ -92,14 +93,25 @@ public class TripTrackingService {
         }
         if (!accepted.isEmpty() && session.getLastReceivedAt()!=null && session.getLastReceivedAt().isAfter(now.minusSeconds(1)))
             throw error(HttpStatus.TOO_MANY_REQUESTS,"GPS upload is too frequent; retry later");
+        TripLocationUpdate previousSaved = accepted.size() == 1
+                ? points.latestValid(tripId, actor, PageRequest.of(0, 1)).stream().findFirst().orElse(null)
+                : null;
+        TripLocationUpdate latestSaved = null;
         for (var point:accepted) {
-            points.save(TripLocationUpdate.builder().trip(trip).actorId(actor).actorRole(role).source(TripLocationSource.GPS)
+            if (latestSaved != null) {
+                previousSaved = latestSaved;
+            }
+            latestSaved = points.save(TripLocationUpdate.builder().trip(trip).actorId(actor).actorRole(role).source(TripLocationSource.GPS)
                     .actorType(session.getDriverSessionId()!=null?"DRIVER_SESSION":"ACCOUNT")
                     .status(trip.getStatus()).trackingSessionId(session.getId()).sampleId(point.sampleId())
                     .latitude(point.latitude()).longitude(point.longitude()).capturedAt(point.capturedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS))
                     .accuracyMeters(point.accuracyMeters()).build());
         }
-        if (!accepted.isEmpty()) {session.setLastReceivedAt(now);sessions.save(session);}
+        if (!accepted.isEmpty()) {
+            session.setLastReceivedAt(now);
+            sessions.save(session);
+            locationPublisher.publishLatestLocation(trip, previousSaved, latestSaved);
+        }
         return new Batch(accepted.stream().map(GpsBatchRequest.Point::sampleId).toList(),List.copyOf(duplicates),List.copyOf(dropped));
     }
     @Transactional(readOnly=true) public Snapshot snapshot(UUID actor,AccountRole role,UUID id) {
