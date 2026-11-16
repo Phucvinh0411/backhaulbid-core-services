@@ -2,6 +2,7 @@ package iuh.fit.se.fleetservice.controller;
 
 import iuh.fit.se.fleetservice.domain.entity.EmptyRoute;
 import iuh.fit.se.fleetservice.service.EmptyRouteService;
+import iuh.fit.se.fleetservice.service.MatchingService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -23,5 +24,12 @@ public class InternalEmptyRouteController {
         
         List<EmptyRoute> matches = emptyRouteService.findMatchingRoutes(origin, destination, request);
         return ResponseEntity.ok(matches);
+    }
+
+    @PostMapping("/optimal-matching")
+    public ResponseEntity<MatchingService.MatchingResult> findOptimalMatching(
+            @RequestBody List<MatchingService.Order> orders
+    ) {
+        return ResponseEntity.ok(emptyRouteService.findOptimalMatching(orders));
     }
 }

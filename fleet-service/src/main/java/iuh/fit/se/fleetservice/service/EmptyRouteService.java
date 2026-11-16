@@ -31,6 +31,7 @@ public class EmptyRouteService {
 
     private final EmptyRouteRepository emptyRouteRepository;
     private final iuh.fit.se.fleetservice.repository.VehicleRepository vehicleRepository;
+    private final MatchingService matchingService;
 
     // ══════════════════════════════════════════════════════════════════
     //  Chủ nhà xe đăng ký tuyến chạy rỗng
@@ -179,7 +180,7 @@ public class EmptyRouteService {
                 }
                 if (!destMatch) continue;
 
-                double score = computeScore(route, vehicle, requiredWeight, latestPickup, distToDrop);
+                double score = computeScore(route, vehicle, requiredWeight, latestPickup, pickupLat, pickupLng, distToDrop);
                 scoredMatches.add(new ScoredRoute(route, score));
 
             } catch (Exception e) {
@@ -189,6 +190,29 @@ public class EmptyRouteService {
 
         scoredMatches.sort(Comparator.comparingDouble(ScoredRoute::score).reversed());
         return scoredMatches.stream().map(ScoredRoute::route).toList();
+    }
+
+    // ══════════════════════════════════════════════════════════════════
+    //  Ghép cặp tối ưu hàng loạt bằng thuật toán Hungarian O(K^3)
+    // ══════════════════════════════════════════════════════════════════
+    @Transactional(readOnly = true)
+    public MatchingService.MatchingResult findOptimalMatching(List<MatchingService.Order> orders) {
+        List<EmptyRoute> candidates = emptyRouteRepository
+                .findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING);
+
+        List<EmptyRoute> validRoutes = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now();
+        for (EmptyRoute route : candidates) {
+            if (route.getExpectedEmptyTime() != null && route.getExpectedEmptyTime().isBefore(now)) {
+                continue;
+            }
+            Optional<Vehicle> vehicleOpt = vehicleRepository.findByLicensePlateIgnoreCase(route.getTruckId());
+            if (vehicleOpt.isPresent() && vehicleOpt.get().getStatus() == VehicleStatus.VERIFIED) {
+                validRoutes.add(route);
+            }
+        }
+
+        return matchingService.findOptimalMatching(orders, validRoutes);
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -266,25 +290,35 @@ public class EmptyRouteService {
             Vehicle vehicle,
             BigDecimal requiredWeight,
             LocalDateTime latestPickup,
+            Double pickupLat,
+            Double pickupLng,
             double distToDrop
     ) {
         double score = 1.0;
 
-        // Điểm 1: Tải trọng gần sát yêu cầu (không quá dư thừa)
+        // Điểm gốc từ MatchingService (W = 0.6 * SpaceScore + 0.4 * TimeScore)
+        if (pickupLat != null && pickupLng != null) {
+            MatchingService.Order order = new MatchingService.Order(
+                    route.getId() != null ? route.getId().toString() : "order",
+                    pickupLat,
+                    pickupLng,
+                    latestPickup
+            );
+            score += matchingService.calculatePairWeight(route, order);
+        } else if (latestPickup != null) {
+            long minutesGap = Math.max(0,
+                    java.time.Duration.between(route.getExpectedEmptyTime(), latestPickup).toMinutes());
+            score += Math.min(minutesGap / 60.0, 2.0);
+        }
+
+        // Điểm cộng: Tải trọng gần sát yêu cầu (không quá dư thừa)
         if (requiredWeight != null && requiredWeight.compareTo(BigDecimal.ZERO) > 0) {
             double capacity = resolveCapacity(route, vehicle);
             double ratio = capacity / requiredWeight.doubleValue();
             score += Math.max(0.0, 2.0 - Math.min(ratio, 3.0));
         }
 
-        // Điểm 2: Thời gian xe rỗng càng gần latestPickup càng tốt (linh hoạt)
-        if (latestPickup != null) {
-            long minutesGap = Math.max(0,
-                    java.time.Duration.between(route.getExpectedEmptyTime(), latestPickup).toMinutes());
-            score += Math.min(minutesGap / 60.0, 2.0);
-        }
-
-        // Điểm 3: Khoảng cách điểm đến càng gần càng tốt
+        // Điểm cộng: Khoảng cách điểm đến càng gần càng tốt
         if (distToDrop != Double.MAX_VALUE) {
             score += Math.max(0.0, 2.0 - distToDrop / 50.0);
         }

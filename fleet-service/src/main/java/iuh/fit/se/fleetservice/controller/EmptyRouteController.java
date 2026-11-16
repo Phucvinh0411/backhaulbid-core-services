@@ -3,6 +3,7 @@ package iuh.fit.se.fleetservice.controller;
 import iuh.fit.se.fleetservice.domain.entity.EmptyRoute;
 import iuh.fit.se.fleetservice.dto.EmptyRouteRequest;
 import iuh.fit.se.fleetservice.service.EmptyRouteService;
+import iuh.fit.se.fleetservice.service.MatchingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -38,6 +39,15 @@ public class EmptyRouteController {
         requireCarrier(role);
         EmptyRoute emptyRoute = emptyRouteService.createEmptyRoute(request, carrierId.toString());
         return ResponseEntity.status(HttpStatus.CREATED).body(emptyRoute);
+    }
+
+    @PostMapping("/optimal-matching")
+    public ResponseEntity<MatchingService.MatchingResult> findOptimalMatching(
+            @RequestHeader("X-User-Role") String role,
+            @RequestBody List<MatchingService.Order> orders
+    ) {
+        requireCarrierOrAdmin(role);
+        return ResponseEntity.ok(emptyRouteService.findOptimalMatching(orders));
     }
 
     @DeleteMapping("/{id}")
