@@ -84,48 +84,66 @@ public class MatchingService {
             
             for (int j = 0; j < numOrders; j++) {
                 Order order = orders.get(j);
-
-                // 1.1 Tính TimeScore (Trọng số Thời gian)
-                long timeDiffMinutes = Duration.between(route.getExpectedEmptyTime(), order.pickupTime).toMinutes();
-                
-                double timeScore = 0.0;
-                if (timeDiffMinutes < 0) {
-                    // Trễ giờ -> Khả thi ghép cặp = 0 (Cặp cấm)
-                    timeScore = 0.0;
-                } else {
-                    // Chờ 0 phút -> 100 điểm. Chờ > 24 tiếng (1440 phút) -> điểm về 0.
-                    timeScore = Math.max(0, 100 - (timeDiffMinutes / 14.4)); 
-                }
-
-                if (timeScore <= 0) {
-                    weightMatrix[i][j] = 0;
-                    continue;
-                }
-
-                // 1.2 Tính SpaceScore (Trọng số Khoảng cách)
-                double distance = calculateHaversineDistance(
-                        route.getLatitude(), route.getLongitude(),
-                        order.pickupLat, order.pickupLng
-                );
-                
-                // Khoảng cách 0km -> 100 điểm. > 100km -> 0 điểm.
-                double spaceScore = Math.max(0, 100 - distance);
-
-                if (spaceScore <= 0) {
-                    weightMatrix[i][j] = 0;
-                    continue;
-                }
-
-                // 1.3 Tổng hợp Trọng số (W) theo hệ số: W = 0.6 * SpaceScore + 0.4 * TimeScore
-                double totalWeight = (0.6 * spaceScore) + (0.4 * timeScore);
-                weightMatrix[i][j] = totalWeight;
-                
-                log.debug("Xe {} ghép Đơn {} -> SpaceScore: {}, TimeScore: {}, Total: {}", 
-                        route.getTruckId(), order.id, spaceScore, timeScore, totalWeight);
+                weightMatrix[i][j] = calculatePairWeight(route, order);
             }
         }
         
         return weightMatrix;
+    }
+
+    /**
+     * Tính trọng số ghép cặp (W = 0.6 * SpaceScore + 0.4 * TimeScore) cho 1 cặp Xe rỗng - Đơn hàng.
+     */
+    public double calculatePairWeight(EmptyRoute route, Order order) {
+        if (route == null || order == null) {
+            return 0.0;
+        }
+
+        // 1.1 Tính TimeScore (Trọng số Thời gian)
+        double timeScore;
+        if (route.getExpectedEmptyTime() != null && order.pickupTime != null) {
+            long timeDiffMinutes = Duration.between(route.getExpectedEmptyTime(), order.pickupTime).toMinutes();
+            if (timeDiffMinutes < 0) {
+                // Trễ giờ -> Khả thi ghép cặp = 0 (Cặp cấm)
+                timeScore = 0.0;
+            } else {
+                // Chờ 0 phút -> 100 điểm. Chờ > 24 tiếng (1440 phút) -> điểm về 0.
+                timeScore = Math.max(0, 100 - (timeDiffMinutes / 14.4));
+            }
+        } else {
+            // Nếu đơn hàng không giới hạn giờ bốc cụ thể, áp dụng điểm thời gian mặc định
+            timeScore = 80.0;
+        }
+
+        if (timeScore <= 0) {
+            return 0.0;
+        }
+
+        // 1.2 Tính SpaceScore (Trọng số Khoảng cách)
+        if (route.getLatitude() == null || route.getLongitude() == null) {
+            return 0.0;
+        }
+        double distance = calculateHaversineDistance(
+                route.getLatitude(), route.getLongitude(),
+                order.pickupLat, order.pickupLng
+        );
+
+        int maxRadius = (route.getSearchRadius() != null && route.getSearchRadius() > 0)
+                ? Math.max(100, route.getSearchRadius())
+                : 100;
+        // Khoảng cách 0km -> 100 điểm. > maxRadius km -> 0 điểm.
+        double spaceScore = Math.max(0, 100 * (1.0 - (distance / maxRadius)));
+
+        if (spaceScore <= 0) {
+            return 0.0;
+        }
+
+        // 1.3 Tổng hợp Trọng số (W) theo hệ số: W = 0.6 * SpaceScore + 0.4 * TimeScore
+        double totalWeight = (0.6 * spaceScore) + (0.4 * timeScore);
+
+        log.debug("Xe {} ghép Đơn {} -> SpaceScore: {}, TimeScore: {}, Total: {}",
+                route.getTruckId(), order.id, spaceScore, timeScore, totalWeight);
+        return totalWeight;
     }
 
     /**

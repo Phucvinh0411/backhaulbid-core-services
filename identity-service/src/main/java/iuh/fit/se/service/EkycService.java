@@ -1,6 +1,7 @@
 package iuh.fit.se.service;
 
 import iuh.fit.se.domain.entity.EkycVerification;
+import iuh.fit.se.domain.enums.VerificationStatus;
 import iuh.fit.se.repository.EkycVerificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -20,5 +21,13 @@ public class EkycService {
     @Transactional(readOnly = true)
     public Optional<EkycVerification> findByAccountId(String accountId) {
         return ekycVerificationRepository.findByAccount_Id(UUID.fromString(accountId));
+    }
+
+    /** Returns true only when the account has completed eKYC with status VERIFIED. */
+    @Transactional(readOnly = true)
+    public boolean isVerified(UUID accountId) {
+        return ekycVerificationRepository.findByAccount_Id(accountId)
+                .map(verification -> verification.getStatus() == VerificationStatus.VERIFIED)
+                .orElse(false);
     }
 }
