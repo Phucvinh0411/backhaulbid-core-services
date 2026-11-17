@@ -110,7 +110,7 @@ public class EmptyRouteService {
         List<EmptyRoute> candidates = emptyRouteRepository
                 .findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING);
 
-        List<ScoredRoute> scoredMatches = new ArrayList<>();
+        List<EmptyRoute> feasibleRoutes = new ArrayList<>();
 
         for (EmptyRoute route : candidates) {
             try {
@@ -165,31 +165,51 @@ public class EmptyRouteService {
                 }
 
                 // ── 7. GIS: điểm đến xe phải gần điểm giao hàng ──
-                boolean destMatch = true;
-                double distToDrop = Double.MAX_VALUE;
                 if (dropLat != null && dropLng != null
                         && route.getDestLatitude() != null && route.getDestLongitude() != null) {
-                    distToDrop = haversineKm(
+                    double distToDrop = haversineKm(
                             route.getDestLatitude(), route.getDestLongitude(),
                             dropLat, dropLng);
-                    // Cho phép sai lệch điểm đến tối đa 100 km (có thể cấu hình)
                     if (distToDrop > 100) {
                         log.debug("Loại route {} - khoảng cách điểm đến {:.1f} km > 100 km", route.getId(), distToDrop);
-                        destMatch = false;
+                        continue;
                     }
                 }
-                if (!destMatch) continue;
 
-                double score = computeScore(route, vehicle, requiredWeight, latestPickup, pickupLat, pickupLng, distToDrop);
-                scoredMatches.add(new ScoredRoute(route, score));
+                feasibleRoutes.add(route);
 
             } catch (Exception e) {
                 log.error("Lỗi khi đánh giá route {}: {}", route.getId(), e.getMessage());
             }
         }
 
-        scoredMatches.sort(Comparator.comparingDouble(ScoredRoute::score).reversed());
-        return scoredMatches.stream().map(ScoredRoute::route).toList();
+        if (feasibleRoutes.isEmpty()) {
+            return List.of();
+        }
+
+        // Nếu không có tọa độ điểm bốc thì trả về danh sách hợp lệ đã lọc
+        if (pickupLat == null || pickupLng == null) {
+            return feasibleRoutes;
+        }
+
+        String orderId = auctionData.get("id") != null ? auctionData.get("id").toString() : "auction-order";
+        MatchingService.Order order = new MatchingService.Order(orderId, pickupLat, pickupLng, latestPickup);
+
+        // Chạy thuật toán ghép cặp tối ưu Hungarian O(K^3) cho từng nhà xe có tuyến hợp lệ
+        // để chọn ra phương tiện tối ưu nhất của mỗi nhà xe tham gia đấu giá
+        Map<String, List<EmptyRoute>> routesByCompany = new LinkedHashMap<>();
+        for (EmptyRoute route : feasibleRoutes) {
+            routesByCompany.computeIfAbsent(route.getCompanyId(), k -> new ArrayList<>()).add(route);
+        }
+
+        List<MatchingService.MatchPair> optimalPairs = new ArrayList<>();
+        for (List<EmptyRoute> companyRoutes : routesByCompany.values()) {
+            MatchingService.MatchingResult result = matchingService.findOptimalMatching(List.of(order), companyRoutes);
+            optimalPairs.addAll(result.getMatchedPairs());
+        }
+
+        optimalPairs.sort(Comparator.comparingDouble(MatchingService.MatchPair::getMatchScore).reversed());
+        return optimalPairs.stream().map(MatchingService.MatchPair::getEmptyRoute).toList();
     }
 
     // ══════════════════════════════════════════════════════════════════
@@ -285,47 +305,6 @@ public class EmptyRouteService {
                 : 0.0;
     }
 
-    private double computeScore(
-            EmptyRoute route,
-            Vehicle vehicle,
-            BigDecimal requiredWeight,
-            LocalDateTime latestPickup,
-            Double pickupLat,
-            Double pickupLng,
-            double distToDrop
-    ) {
-        double score = 1.0;
-
-        // Điểm gốc từ MatchingService (W = 0.6 * SpaceScore + 0.4 * TimeScore)
-        if (pickupLat != null && pickupLng != null) {
-            MatchingService.Order order = new MatchingService.Order(
-                    route.getId() != null ? route.getId().toString() : "order",
-                    pickupLat,
-                    pickupLng,
-                    latestPickup
-            );
-            score += matchingService.calculatePairWeight(route, order);
-        } else if (latestPickup != null) {
-            long minutesGap = Math.max(0,
-                    java.time.Duration.between(route.getExpectedEmptyTime(), latestPickup).toMinutes());
-            score += Math.min(minutesGap / 60.0, 2.0);
-        }
-
-        // Điểm cộng: Tải trọng gần sát yêu cầu (không quá dư thừa)
-        if (requiredWeight != null && requiredWeight.compareTo(BigDecimal.ZERO) > 0) {
-            double capacity = resolveCapacity(route, vehicle);
-            double ratio = capacity / requiredWeight.doubleValue();
-            score += Math.max(0.0, 2.0 - Math.min(ratio, 3.0));
-        }
-
-        // Điểm cộng: Khoảng cách điểm đến càng gần càng tốt
-        if (distToDrop != Double.MAX_VALUE) {
-            score += Math.max(0.0, 2.0 - distToDrop / 50.0);
-        }
-
-        return score;
-    }
-
     private Optional<BigDecimal> parseBigDecimal(Object raw) {
         if (raw == null) return Optional.empty();
         try { return Optional.of(new BigDecimal(raw.toString())); }
@@ -358,6 +337,4 @@ public class EmptyRouteService {
 
         return Optional.empty();
     }
-
-    private record ScoredRoute(EmptyRoute route, double score) {}
 }
