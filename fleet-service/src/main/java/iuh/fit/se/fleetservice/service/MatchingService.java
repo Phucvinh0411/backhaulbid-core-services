@@ -19,7 +19,7 @@ public class MatchingService {
     private static final double EPS = 1e-9;
 
     /**
-     * Giả lập Entity Order cho bài toán ghép cặp (Thường sẽ được gọi qua FeignClient từ OrderService)
+     * DTO biểu diễn Đơn hàng / Phiên đấu giá (Auction) truyền từ bidding-service sang để ghép cặp với Xe rỗng
      */
     @Data
     @AllArgsConstructor
