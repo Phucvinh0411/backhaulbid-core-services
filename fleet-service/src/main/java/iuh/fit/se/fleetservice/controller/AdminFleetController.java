@@ -5,6 +5,8 @@ import iuh.fit.se.fleetservice.domain.enums.VerificationStatus;
 import iuh.fit.se.fleetservice.dto.DriverResponse;
 import iuh.fit.se.fleetservice.dto.ReviewVerificationRequest;
 import iuh.fit.se.fleetservice.dto.VehicleResponse;
+import iuh.fit.se.fleetservice.mapper.DriverMapper;
+import iuh.fit.se.fleetservice.mapper.VehicleMapper;
 import iuh.fit.se.fleetservice.service.DriverProfileService;
 import iuh.fit.se.fleetservice.service.VehicleService;
 import jakarta.validation.Valid;
@@ -29,6 +31,8 @@ import java.util.UUID;
 public class AdminFleetController {
     private final VehicleService vehicleService;
     private final DriverProfileService driverProfileService;
+    private final VehicleMapper vehicleMapper;
+    private final DriverMapper driverMapper;
 
     @GetMapping("/vehicles")
     public List<VehicleResponse> listVehicles(
@@ -37,7 +41,7 @@ public class AdminFleetController {
             @RequestParam(defaultValue = "PENDING") VehicleStatus status
     ) {
         requireAdmin(role);
-        return vehicleService.listForReview(status).stream().map(VehicleResponse::from).toList();
+        return vehicleMapper.toResponses(vehicleService.listForReview(status));
     }
 
     @PatchMapping("/vehicles/{vehicleId}/verification")
@@ -48,7 +52,7 @@ public class AdminFleetController {
             @Valid @RequestBody ReviewVerificationRequest request
     ) {
         requireAdmin(role);
-        return VehicleResponse.from(vehicleService.review(adminId, vehicleId, request));
+        return vehicleMapper.toResponse(vehicleService.review(adminId, vehicleId, request));
     }
 
     @GetMapping("/drivers")
@@ -58,7 +62,7 @@ public class AdminFleetController {
             @RequestParam(defaultValue = "PENDING") VerificationStatus status
     ) {
         requireAdmin(role);
-        return driverProfileService.listForReview(status).stream().map(DriverResponse::from).toList();
+        return driverMapper.toResponses(driverProfileService.listForReview(status));
     }
 
     @PatchMapping("/drivers/{driverId}/verification")
@@ -69,7 +73,7 @@ public class AdminFleetController {
             @Valid @RequestBody ReviewVerificationRequest request
     ) {
         requireAdmin(role);
-        return DriverResponse.from(driverProfileService.review(adminId, driverId, request));
+        return driverMapper.toResponse(driverProfileService.review(adminId, driverId, request));
     }
 
     private void requireAdmin(String role) {

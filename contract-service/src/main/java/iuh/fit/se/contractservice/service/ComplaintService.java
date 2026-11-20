@@ -10,6 +10,7 @@ import iuh.fit.se.contractservice.dto.AddComplaintMessageRequest;
 import iuh.fit.se.contractservice.dto.ComplaintResponse;
 import iuh.fit.se.contractservice.dto.CreateComplaintRequest;
 import iuh.fit.se.contractservice.dto.ResolveComplaintRequest;
+import iuh.fit.se.contractservice.mapper.ComplaintMapper;
 import iuh.fit.se.contractservice.repository.ComplaintRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ import java.util.UUID;
 public class ComplaintService {
     private final ComplaintRepository complaintRepository;
     private final TripRepository tripRepository;
+    private final ComplaintMapper complaintMapper;
     private final Map<UUID, CopyOnWriteArrayList<SseEmitter>> subscribers = new ConcurrentHashMap<>();
     private final Map<UUID, Object> subscriberLocks = new ConcurrentHashMap<>();
 
@@ -65,12 +67,12 @@ public class ComplaintService {
                     ? complaintRepository.findByCategoryOrderByCreatedAtDesc(category)
                     : complaintRepository.findPartyComplaintsByCategory(accountId, category);
         }
-        return complaints.stream().map(ComplaintResponse::from).toList();
+        return complaintMapper.toResponses(complaints);
     }
 
     @Transactional(readOnly = true)
     public ComplaintResponse get(UUID accountId, AccountRole role, UUID complaintId) {
-        return ComplaintResponse.from(loadAccessible(accountId, role, complaintId));
+        return complaintMapper.toResponse(loadAccessible(accountId, role, complaintId));
     }
 
     @Transactional
@@ -103,7 +105,7 @@ public class ComplaintService {
                 .evidenceUrl(normalizeOptional(request.evidenceUrl()))
                 .status(ComplaintStatus.PENDING)
                 .build();
-        return ComplaintResponse.from(complaintRepository.save(complaint));
+        return complaintMapper.toResponse(complaintRepository.save(complaint));
     }
 
     @Transactional
@@ -118,7 +120,7 @@ public class ComplaintService {
                 .createdAt(Instant.now())
                 .build());
         if (complaint.getStatus() == ComplaintStatus.PENDING) complaint.setStatus(ComplaintStatus.PROCESSING);
-        ComplaintResponse response = ComplaintResponse.from(complaintRepository.save(complaint));
+        ComplaintResponse response = complaintMapper.toResponse(complaintRepository.save(complaint));
         publishAfterCommit(complaintId, response);
         return response;
     }
@@ -139,7 +141,7 @@ public class ComplaintService {
                 .message(request.resolution().trim())
                 .createdAt(Instant.now())
                 .build());
-        ComplaintResponse response = ComplaintResponse.from(complaintRepository.save(complaint));
+        ComplaintResponse response = complaintMapper.toResponse(complaintRepository.save(complaint));
         publishAfterCommit(complaintId, response);
         return response;
     }

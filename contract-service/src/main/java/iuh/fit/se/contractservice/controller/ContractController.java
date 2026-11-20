@@ -5,6 +5,7 @@ import iuh.fit.se.contractservice.domain.enums.ContractStatus;
 import iuh.fit.se.contractservice.dto.ContractResponse;
 import iuh.fit.se.contractservice.dto.RequestSignOtpResponse;
 import iuh.fit.se.contractservice.dto.SignContractRequest;
+import iuh.fit.se.contractservice.mapper.ContractMapper;
 import iuh.fit.se.contractservice.service.ContractService;
 import iuh.fit.se.contractservice.service.IdentityVerificationClient;
 import jakarta.validation.Valid;
@@ -35,6 +36,7 @@ import java.util.UUID;
 public class ContractController {
     private final ContractService contractService;
     private final IdentityVerificationClient identityVerificationClient;
+    private final ContractMapper contractMapper;
 
     @GetMapping("/mine")
     public List<ContractResponse> listMine(
@@ -43,7 +45,7 @@ public class ContractController {
             @RequestParam(required = false) ContractStatus status
     ) {
         AccountRole accountRole = parseRole(role);
-        return contractService.list(accountId, accountRole, status).stream().map(ContractResponse::from).toList();
+        return contractMapper.toResponses(contractService.list(accountId, accountRole, status));
     }
 
     @GetMapping("/{contractId}")
@@ -52,7 +54,7 @@ public class ContractController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID contractId
     ) {
-        return ContractResponse.from(contractService.get(accountId, parseRole(role), contractId));
+        return contractMapper.toResponse(contractService.get(accountId, parseRole(role), contractId));
     }
 
     @PostMapping("/{contractId}/sign/otp")
@@ -75,7 +77,7 @@ public class ContractController {
             @Valid @RequestBody SignContractRequest request
     ) {
         AccountRole accountRole = parseVerifiedPartyRole(role, accountId);
-        return ContractResponse.from(
+        return contractMapper.toResponse(
                 contractService.sign(accountId, accountRole, contractId, ipAddress, request.otpCode()));
     }
 

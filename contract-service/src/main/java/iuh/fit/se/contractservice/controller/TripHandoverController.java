@@ -3,6 +3,7 @@ package iuh.fit.se.contractservice.controller;
 import iuh.fit.se.contractservice.dto.ConfirmTripHandoverRequest;
 import iuh.fit.se.contractservice.dto.RecordTripHandoverRequest;
 import iuh.fit.se.contractservice.dto.TripHandoverResponse;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import iuh.fit.se.contractservice.service.MediaEvidenceClient;
 import iuh.fit.se.contractservice.service.TripHandoverService;
 import jakarta.validation.Valid;
@@ -35,6 +36,7 @@ import java.util.UUID;
 public class TripHandoverController {
     private final TripHandoverService handovers;
     private final MediaEvidenceClient media;
+    private final TripMapper tripMapper;
 
     /** Records or replaces the handover before pickup (driver session or carrier). */
     @PutMapping
@@ -42,7 +44,7 @@ public class TripHandoverController {
                                        @RequestHeader("X-User-Role") String role,
                                        @PathVariable UUID tripId,
                                        @Valid @RequestBody RecordTripHandoverRequest request) {
-        return TripHandoverResponse.from(handovers.record(accountId, TripReviewController.parseRole(role), tripId, request));
+        return tripMapper.toHandoverResponse(handovers.record(accountId, TripReviewController.parseRole(role), tripId, request));
     }
 
     /** The shipper's confirmation that the goods were handed over. */
@@ -51,7 +53,7 @@ public class TripHandoverController {
                                         @RequestHeader("X-User-Role") String role,
                                         @PathVariable UUID tripId,
                                         @Valid @RequestBody ConfirmTripHandoverRequest request) {
-        return TripHandoverResponse.from(handovers.confirm(accountId, TripReviewController.parseRole(role), tripId, request));
+        return tripMapper.toHandoverResponse(handovers.confirm(accountId, TripReviewController.parseRole(role), tripId, request));
     }
 
     /** The trip's handover as an array of zero or one item. */
@@ -59,8 +61,7 @@ public class TripHandoverController {
     public List<TripHandoverResponse> view(@RequestHeader("X-User-Id") UUID accountId,
                                            @RequestHeader("X-User-Role") String role,
                                            @PathVariable UUID tripId) {
-        return handovers.view(accountId, TripReviewController.parseRole(role), tripId).stream()
-                .map(TripHandoverResponse::from).toList();
+        return tripMapper.toHandoverResponses(handovers.view(accountId, TripReviewController.parseRole(role), tripId));
     }
 
     /**

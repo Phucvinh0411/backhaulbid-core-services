@@ -8,6 +8,7 @@ import iuh.fit.se.contractservice.dto.CarrierReviewItemResponse;
 import iuh.fit.se.contractservice.dto.CarrierReviewPageResponse;
 import iuh.fit.se.contractservice.dto.CarrierReviewSummaryResponse;
 import iuh.fit.se.contractservice.dto.CreateTripReviewRequest;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import iuh.fit.se.contractservice.repository.TripRepository;
 import iuh.fit.se.contractservice.repository.TripReviewRepository;
 import iuh.fit.se.contractservice.service.driveraccess.UuidV7;
@@ -43,12 +44,14 @@ public class TripReviewService {
 
     private final TripRepository trips;
     private final TripReviewRepository reviews;
+    private final TripMapper tripMapper;
     private final Clock clock;
     private final UuidV7 ids;
 
-    public TripReviewService(TripRepository trips, TripReviewRepository reviews, Clock clock) {
+    public TripReviewService(TripRepository trips, TripReviewRepository reviews, TripMapper tripMapper, Clock clock) {
         this.trips = trips;
         this.reviews = reviews;
+        this.tripMapper = tripMapper;
         this.clock = clock;
         this.ids = new UuidV7(clock, new SecureRandom());
     }
@@ -133,7 +136,7 @@ public class TripReviewService {
         }
         Page<TripReview> result = reviews.findByCarrierId(carrierId,
                 PageRequest.of(page - 1, pageSize, Sort.by(Sort.Direction.DESC, "createdAt")));
-        List<CarrierReviewItemResponse> items = result.getContent().stream().map(CarrierReviewItemResponse::from).toList();
+        List<CarrierReviewItemResponse> items = tripMapper.toCarrierReviewItems(result.getContent());
         return new CarrierReviewPageResponse(items, page, pageSize, result.getTotalElements(), result.getTotalPages());
     }
 

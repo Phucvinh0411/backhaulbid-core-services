@@ -5,7 +5,7 @@ import iuh.fit.se.fleetservice.dto.CreateVehicleRequest;
 import iuh.fit.se.fleetservice.dto.UpdateVehicleRequest;
 import iuh.fit.se.fleetservice.dto.VehicleResponse;
 import iuh.fit.se.fleetservice.dto.PublicVehicleResponse;
-import iuh.fit.se.fleetservice.dto.ZipImportPreviewResponse;
+import iuh.fit.se.fleetservice.mapper.VehicleMapper;
 import iuh.fit.se.fleetservice.service.VehicleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +31,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class VehicleController {
     private final VehicleService vehicleService;
+    private final VehicleMapper vehicleMapper;
 
     @GetMapping("/mine")
     public List<VehicleResponse> getMyVehicles(
@@ -39,10 +40,7 @@ public class VehicleController {
             @RequestParam(required = false) VehicleStatus status
     ) {
         requireCarrierOrAdmin(role);
-        return vehicleService.listMine(carrierId, status)
-                .stream()
-                .map(VehicleResponse::from)
-                .toList();
+        return vehicleMapper.toResponses(vehicleService.listMine(carrierId, status));
     }
 
     @GetMapping("/carrier/{carrierId}")
@@ -51,9 +49,7 @@ public class VehicleController {
             @RequestHeader("X-User-Role") String role
     ) {
         requireShipperCarrierOrAdmin(role);
-        return vehicleService.listMine(carrierId, null).stream()
-                .map(PublicVehicleResponse::from)
-                .toList();
+        return vehicleMapper.toPublicResponses(vehicleService.listMine(carrierId, null));
     }
 
     @PostMapping
@@ -64,7 +60,7 @@ public class VehicleController {
     ) {
         requireCarrier(role);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(VehicleResponse.from(vehicleService.create(carrierId, request)));
+                .body(vehicleMapper.toResponse(vehicleService.create(carrierId, request)));
     }
 
     @PatchMapping("/{vehicleId}")
@@ -75,7 +71,7 @@ public class VehicleController {
             @Valid @RequestBody UpdateVehicleRequest request
     ) {
         requireCarrier(role);
-        return VehicleResponse.from(vehicleService.update(carrierId, vehicleId, request));
+        return vehicleMapper.toResponse(vehicleService.update(carrierId, vehicleId, request));
     }
 
 

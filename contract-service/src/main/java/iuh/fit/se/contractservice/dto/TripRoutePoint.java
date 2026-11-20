@@ -20,9 +20,4 @@ public record TripRoutePoint(Double latitude, Double longitude,
         return new TripRouteLocation(latitude, longitude, label, address,
                 latitude == null ? null : "USER_CONFIRMED");
     }
-
-    public static TripRoutePoint from(TripRouteLocation location) {
-        return location == null ? null : new TripRoutePoint(location.getLatitude(), location.getLongitude(),
-                location.getLabel(), location.getAddress(), location.getSource());
-    }
 }

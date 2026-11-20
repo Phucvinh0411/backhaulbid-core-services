@@ -3,6 +3,7 @@ package iuh.fit.se.contractservice.service;
 import iuh.fit.se.contractservice.domain.entity.*;
 import iuh.fit.se.contractservice.domain.enums.*;
 import iuh.fit.se.contractservice.dto.*;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import iuh.fit.se.contractservice.repository.*;
 import iuh.fit.se.contractservice.service.driveraccess.DriverAccessPolicy;
 import lombok.RequiredArgsConstructor;
@@ -26,12 +27,10 @@ public class TripTrackingService {
     private final TripRoadRouteService roads;
     private final DriverAccessPolicy driverAccess;
     private final TripLocationEventPublisher locationPublisher;
+    private final TripMapper tripMapper;
     /** driverAccountId for a legacy account driver, driverSessionId for a code-login session; never both. */
     public record Session(UUID id, UUID tripId, UUID driverAccountId, UUID driverSessionId, String status,
             Instant startedAt, Instant endedAt, Instant lastReceivedAt) {
-        static Session from(TripTrackingSession s) {
-            return new Session(s.getId(),s.getTripId(),s.getDriverAccountId(),s.getDriverSessionId(),s.getStatus(),s.getStartedAt(),s.getEndedAt(),s.getLastReceivedAt());
-        }
         Session stopped() { return new Session(id,tripId,driverAccountId,driverSessionId,"STOPPED",startedAt,endedAt,lastReceivedAt); }
     }
     private static UUID actorOf(TripTrackingSession s) { return s.getDriverSessionId()!=null ? s.getDriverSessionId() : s.getDriverAccountId(); }
@@ -48,7 +47,7 @@ public class TripTrackingService {
     @Transactional public Session start(UUID actor,AccountRole role,UUID id) {
         Trip trip=locked(id); driver(trip,actor,role); requireSignedContract(id); activeTrip(trip);
         var existing=sessions.findFirstByTripIdAndStatus(id,"ACTIVE");
-        if (existing.isPresent() && actor.equals(actorOf(existing.get()))) return Session.from(existing.get());
+        if (existing.isPresent() && actor.equals(actorOf(existing.get()))) return tripMapper.toTrackingSession(existing.get());
         Instant now=clock.instant();
         boolean codeSession=DriverAccessPolicy.isDriverSession();
         if (codeSession) sessions.stopForDriverSession(actor,now); else sessions.stopForDriver(actor,now);
@@ -56,7 +55,7 @@ public class TripTrackingService {
         var session=TripTrackingSession.builder().id(UUID.randomUUID()).tripId(id)
                 .driverAccountId(codeSession?null:actor).driverSessionId(codeSession?actor:null)
                 .status("ACTIVE").startedAt(now).build();
-        return Session.from(sessions.saveAndFlush(session));
+        return tripMapper.toTrackingSession(sessions.saveAndFlush(session));
     }
     @Transactional public Session stop(UUID actor,AccountRole role,UUID tripId,UUID sessionId) {
         var session=session(sessionId);
@@ -65,7 +64,7 @@ public class TripTrackingService {
         if ("ACTIVE".equals(session.getStatus())) {
             session.setStatus("STOPPED");session.setEndedAt(clock.instant());sessions.save(session);
         }
-        return Session.from(session);
+        return tripMapper.toTrackingSession(session);
     }
     @Transactional public Batch upload(UUID actor,AccountRole role,UUID tripId,GpsBatchRequest request) {
         Trip trip=locked(tripId);driver(trip,actor,role);requireSignedContract(tripId);activeTrip(trip);
@@ -123,11 +122,11 @@ public class TripTrackingService {
         boolean terminal=terminal(trip.getStatus());
         boolean stopped=terminal || (session!=null && (!"ACTIVE".equals(session.getStatus()) || !Objects.equals(actorOf(session),currentDriver)));
         var event=events.findFirstByTripIdOrderByRecordedAtDesc(id);
-        var from=TripRoutePoint.from(trip.getPickupPoint());var to=TripRoutePoint.from(trip.getDeliveryPoint());
+        var from=tripMapper.toRoutePoint(trip.getPickupPoint());var to=tripMapper.toRoutePoint(trip.getDeliveryPoint());
         // Cache read only: the provider is called on a background thread, never inside this transaction.
         var route=roads.lookup(from,to);
         return new Snapshot(id,trip.getStatus(),from,to,trip.getRouteVersion(),
-                location==null?null:TripLocationResponse.from(location),session==null?null:(stopped?Session.from(session).stopped():Session.from(session)),
+                tripMapper.toLocationResponse(location),session==null?null:(stopped?tripMapper.toTrackingSession(session).stopped():tripMapper.toTrackingSession(session)),
                 TripGpsPolicy.freshness(location==null?null:captureTime(location),stopped,clock.instant()),
                 event==null?null:event.getRecordedAt(),
                 route==null?null:route.geometry(),route==null?null:route.status().name(),route==null?null:route.meta());
@@ -149,7 +148,7 @@ public class TripTrackingService {
         }
         String next=rows.isEmpty()?cursor:encode(rows.get(rows.size()-1));
         rows.sort(Comparator.comparing(TripTrackingService::captureTime).thenComparing(TripLocationUpdate::getId));
-        return new History(rows.stream().map(TripLocationResponse::from).toList(),next,more,sampled,total);
+        return new History(tripMapper.toLocationResponses(rows),next,more,sampled,total);
     }
     private static boolean same(TripLocationUpdate old,GpsBatchRequest.Point point) {
         return Objects.equals(old.getCapturedAt(),point.capturedAt().truncatedTo(java.time.temporal.ChronoUnit.MICROS)) && Objects.equals(old.getLatitude(),point.latitude())

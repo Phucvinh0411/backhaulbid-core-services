@@ -83,12 +83,7 @@ public class PaymentOrderService {
             // Same status as a missing order so callers cannot probe other accounts' invoices.
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order not found");
         }
-        return new TopUpStatusResponse(
-                order.getInvoiceNumber(),
-                order.getStatus().name(),
-                order.getAmount(),
-                order.getPaidAt(),
-                order.getExpiresAt());
+        return topUpMapper.toTopUpStatusResponse(order);
     }
 
     @Transactional(readOnly = true)
@@ -107,7 +102,7 @@ public class PaymentOrderService {
 
     @Transactional(readOnly = true)
     public PaymentOrderResponse getAdmin(String invoiceNumber) {
-        return toResponse(paymentOrderRepository.findByInvoiceNumber(invoiceNumber)
+        return topUpMapper.toPaymentOrderResponse(paymentOrderRepository.findByInvoiceNumber(invoiceNumber)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Payment order not found")));
     }
 
@@ -127,7 +122,7 @@ public class PaymentOrderService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Payment order has expired");
         }
         order.setStatus(PaymentOrderStatus.CANCELLED);
-        return toResponse(paymentOrderRepository.save(order));
+        return topUpMapper.toPaymentOrderResponse(paymentOrderRepository.save(order));
     }
 
     @Transactional
@@ -208,27 +203,11 @@ public class PaymentOrderService {
 
     private PaymentOrderPageResponse page(Page<PaymentOrder> result, int page, int pageSize) {
         return new PaymentOrderPageResponse(
-                result.getContent().stream().map(this::toResponse).toList(),
+                result.getContent().stream().map(topUpMapper::toPaymentOrderResponse).toList(),
                 page,
                 pageSize,
                 result.getTotalElements(),
                 result.getTotalPages());
-    }
-
-    private PaymentOrderResponse toResponse(PaymentOrder order) {
-        return new PaymentOrderResponse(
-                order.getId(),
-                order.getAccountId(),
-                order.getInvoiceNumber(),
-                order.getAmount(),
-                order.getProvider(),
-                order.getStatus().name(),
-                order.getCheckoutUrl(),
-                order.getProviderTransactionId(),
-                order.getExpiresAt(),
-                order.getPaidAt(),
-                order.getCreatedAt(),
-                order.getUpdatedAt());
     }
 
     private Pageable pageable(int page, int pageSize) {

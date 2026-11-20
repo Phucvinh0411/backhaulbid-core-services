@@ -15,6 +15,8 @@ import iuh.fit.se.contractservice.dto.CarrierClaimResponse;
 import iuh.fit.se.contractservice.dto.CreateInsuranceClaimRequest;
 import iuh.fit.se.contractservice.dto.HandoverContextResponse;
 import iuh.fit.se.contractservice.dto.InsuranceClaimResponse;
+import iuh.fit.se.contractservice.mapper.InsuranceClaimMapper;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import iuh.fit.se.contractservice.repository.InsuranceClaimEvidenceRepository;
 import iuh.fit.se.contractservice.repository.InsuranceClaimRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
@@ -74,12 +76,15 @@ public class InsuranceClaimService {
     private final TripCargoDocumentService cargoDocuments;
     private final TripHandoverService handovers;
     private final ClaimPackageService packages;
+    private final InsuranceClaimMapper claimMapper;
+    private final TripMapper tripMapper;
     private final Clock clock;
     private final UuidV7 ids;
 
     public InsuranceClaimService(TripRepository trips, InsuranceClaimRepository claims, InsuranceClaimEvidenceRepository evidence,
                                  MediaEvidenceClient media, TripCargoDocumentService cargoDocuments,
-                                 TripHandoverService handovers, ClaimPackageService packages, Clock clock) {
+                                 TripHandoverService handovers, ClaimPackageService packages,
+                                 InsuranceClaimMapper claimMapper, TripMapper tripMapper, Clock clock) {
         this.trips = trips;
         this.claims = claims;
         this.evidence = evidence;
@@ -87,6 +92,8 @@ public class InsuranceClaimService {
         this.cargoDocuments = cargoDocuments;
         this.handovers = handovers;
         this.packages = packages;
+        this.claimMapper = claimMapper;
+        this.tripMapper = tripMapper;
         this.clock = clock;
         this.ids = new UuidV7(clock, new SecureRandom());
     }
@@ -343,10 +350,10 @@ public class InsuranceClaimService {
         List<TripCargoDocument> cargo = cargoDocuments.documentsOf(claim.getTripId());
         BigDecimal declared = trips.findById(claim.getTripId()).map(Trip::getDeclaredGoodsValue).orElse(null);
         HandoverContextResponse handover = handovers.handoverOf(claim.getTripId())
-                .map(record -> HandoverContextResponse.of(record, claim.getTripId(), true))
+                .map(record -> tripMapper.toHandoverContextResponse(record, claim.getTripId(), true))
                 .orElse(null);
-        return InsuranceClaimResponse.from(claim, files, missingItems(claim, files, cargo), declared,
-                cargo.stream().map(CargoDocumentResponse::from).toList(), handover);
+        return claimMapper.toInsuranceClaimResponse(claim, files, missingItems(claim, files, cargo), declared,
+                claimMapper.toCargoDocumentResponses(cargo), handover);
     }
 
     /** The carrier's view of a shared claim: the shared revision only, with metadata and no storage detail. */
@@ -360,9 +367,9 @@ public class InsuranceClaimService {
                 .filter(row -> !row.getUploadedAt().isAfter(sharedAt))
                 .toList();
         HandoverContextResponse handover = handovers.handoverOf(claim.getTripId())
-                .map(record -> HandoverContextResponse.of(record, claim.getTripId(), false))
+                .map(record -> tripMapper.toHandoverContextResponse(record, claim.getTripId(), false))
                 .orElse(null);
-        return CarrierClaimResponse.from(claim, cargo, files, handover);
+        return claimMapper.toCarrierClaimResponse(claim, cargo, files, handover);
     }
 
     private static Set<ClaimEvidenceKind> kindsOf(List<InsuranceClaimEvidence> files) {

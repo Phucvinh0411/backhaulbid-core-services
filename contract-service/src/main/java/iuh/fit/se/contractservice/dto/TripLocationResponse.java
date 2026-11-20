@@ -1,6 +1,5 @@
 package iuh.fit.se.contractservice.dto;
 
-import iuh.fit.se.contractservice.domain.entity.TripLocationUpdate;
 import iuh.fit.se.contractservice.domain.entity.TripLocationSource;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 
@@ -20,9 +19,4 @@ public record TripLocationResponse(
         Instant capturedAt,
         Double accuracyMeters
 ) {
-    public static TripLocationResponse from(TripLocationUpdate location) {
-        return new TripLocationResponse(location.getId(), location.getTrip().getId(), location.getActorId(),
-                location.getLatitude(), location.getLongitude(), location.getLabel(), location.getSource(),
-                location.getStatus(), location.getRecordedAt(), location.getCapturedAt(), location.getAccuracyMeters());
-    }
 }

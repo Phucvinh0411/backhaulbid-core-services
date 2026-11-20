@@ -1,6 +1,5 @@
 package iuh.fit.se.contractservice.dto;
 
-import iuh.fit.se.contractservice.domain.entity.Complaint;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
 import iuh.fit.se.contractservice.domain.enums.ComplaintCategory;
 import iuh.fit.se.contractservice.domain.enums.ComplaintDecision;
@@ -26,28 +25,6 @@ public record ComplaintResponse(
         Instant updatedAt,
         List<MessageResponse> messages
 ) {
-    public static ComplaintResponse from(Complaint complaint) {
-        return new ComplaintResponse(
-                complaint.getId(),
-                complaint.getTripId(),
-                complaint.getReporterId(),
-                complaint.getRespondentId(),
-                complaint.getCategory(),
-                complaint.getTitle(),
-                complaint.getDescription(),
-                complaint.getEvidenceUrl(),
-                complaint.getStatus(),
-                complaint.getDecision(),
-                complaint.getResolution(),
-                complaint.getCreatedAt(),
-                complaint.getUpdatedAt(),
-                complaint.getMessages() == null ? List.of() : complaint.getMessages().stream().map(MessageResponse::from).toList()
-        );
-    }
-
     public record MessageResponse(UUID id, UUID senderId, AccountRole senderRole, String message, Instant createdAt) {
-        static MessageResponse from(iuh.fit.se.contractservice.domain.entity.ComplaintMessage message) {
-            return new MessageResponse(message.getId(), message.getSenderId(), message.getSenderRole(), message.getMessage(), message.getCreatedAt());
-        }
     }
 }

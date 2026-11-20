@@ -5,6 +5,7 @@ import iuh.fit.se.domain.entity.Company;
 import iuh.fit.se.domain.enums.AccountRole;
 import iuh.fit.se.domain.enums.InsuranceCoverageType;
 import iuh.fit.se.dto.CarrierPublicProfileResponse;
+import iuh.fit.se.mapper.AccountMapper;
 import iuh.fit.se.repository.AccountRepository;
 import iuh.fit.se.repository.CompanyRepository;
 import iuh.fit.se.repository.InsuranceInfoRepository;
@@ -23,6 +24,7 @@ public class CarrierPublicProfileService {
     private final AccountRepository accountRepository;
     private final CompanyRepository companyRepository;
     private final InsuranceInfoRepository insuranceInfoRepository;
+    private final AccountMapper accountMapper;
 
     @Transactional(readOnly = true)
     public CarrierPublicProfileResponse get(UUID carrierId) {
@@ -36,15 +38,6 @@ public class CarrierPublicProfileService {
                         company.getId(), InsuranceCoverageType.CARGO_LIABILITY),
                 LocalDate.now());
 
-        return new CarrierPublicProfileResponse(
-                account.getId(),
-                account.getEmail(),
-                account.getPhone(),
-                company.getCompanyName(),
-                company.getAddress(),
-                company.getLegalRepresentative(),
-                company.getTaxCode(),
-                company.getVerificationStatus() == null ? null : company.getVerificationStatus().name(),
-                cargoLiabilityVerifiedUntil);
+        return accountMapper.toCarrierPublicProfileResponse(account, company, cargoLiabilityVerifiedUntil);
     }
 }

@@ -4,6 +4,7 @@ import iuh.fit.se.contractservice.config.RabbitMQConfig;
 import iuh.fit.se.contractservice.domain.entity.Trip;
 import iuh.fit.se.contractservice.domain.entity.TripLocationUpdate;
 import iuh.fit.se.contractservice.dto.TripLocationResponse;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -27,6 +28,7 @@ public class TripLocationEventPublisher {
 
     private final RabbitTemplate rabbitTemplate;
     private final Clock clock;
+    private final TripMapper tripMapper;
     private final Map<UUID, Instant> lastPublishedByTrip = new ConcurrentHashMap<>();
 
     public void publishLatestLocation(Trip trip, TripLocationUpdate previous, TripLocationUpdate latest) {
@@ -67,7 +69,7 @@ public class TripLocationEventPublisher {
                 }
             }
 
-            TripLocationResponse pointResponse = TripLocationResponse.from(latest);
+            TripLocationResponse pointResponse = tripMapper.toLocationResponse(latest);
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("tripId", tripId.toString());
             data.put("shipperId", trip.getShipperId() != null ? trip.getShipperId().toString() : null);

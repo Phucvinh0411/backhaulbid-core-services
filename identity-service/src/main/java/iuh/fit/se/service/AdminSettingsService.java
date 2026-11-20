@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import iuh.fit.se.domain.dto.request.AdminSettingsRequest;
 import iuh.fit.se.domain.dto.response.AdminSettingsResponse;
 import iuh.fit.se.domain.entity.AdminSetting;
+import iuh.fit.se.mapper.AdminSettingsMapper;
 import iuh.fit.se.repository.AdminSettingRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -28,12 +29,13 @@ public class AdminSettingsService {
 
     private final AdminSettingRepository repository;
     private final ObjectMapper objectMapper;
+    private final AdminSettingsMapper adminSettingsMapper;
 
     @Transactional(readOnly = true)
     public AdminSettingsResponse get(String scope) {
         String normalizedScope = normalizeScope(scope);
         return repository.findByScope(normalizedScope)
-                .map(this::toResponse)
+                .map(setting -> adminSettingsMapper.toResponse(setting, parseValues(setting)))
                 .orElseGet(() -> new AdminSettingsResponse(
                         normalizedScope,
                         new LinkedHashMap<>(),
@@ -49,19 +51,19 @@ public class AdminSettingsService {
                     .orElseGet(() -> AdminSetting.builder().scope(normalizedScope).build());
             setting.setSettingsJson(objectMapper.writeValueAsString(request.getValues()));
             setting.setUpdatedBy(adminId);
-            return toResponse(repository.save(setting));
+            AdminSetting saved = repository.save(setting);
+            return adminSettingsMapper.toResponse(saved, parseValues(saved));
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Could not serialize admin settings", exception);
         }
     }
 
-    private AdminSettingsResponse toResponse(AdminSetting setting) {
+    private Map<String, Object> parseValues(AdminSetting setting) {
         try {
-            Map<String, Object> values = objectMapper.readValue(
+            return objectMapper.readValue(
                     setting.getSettingsJson(),
                     new TypeReference<>() {}
             );
-            return new AdminSettingsResponse(setting.getScope(), values, setting.getUpdatedAt());
         } catch (JsonProcessingException exception) {
             throw new IllegalStateException("Stored admin settings are invalid", exception);
         }

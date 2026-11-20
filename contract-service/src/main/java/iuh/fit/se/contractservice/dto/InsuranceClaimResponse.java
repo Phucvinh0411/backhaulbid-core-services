@@ -1,7 +1,5 @@
 package iuh.fit.se.contractservice.dto;
 
-import iuh.fit.se.contractservice.domain.entity.InsuranceClaim;
-import iuh.fit.se.contractservice.domain.entity.InsuranceClaimEvidence;
 import iuh.fit.se.contractservice.domain.enums.ClaimIncidentType;
 import iuh.fit.se.contractservice.domain.enums.InsuranceClaimStatus;
 
@@ -40,18 +38,4 @@ public record InsuranceClaimResponse(
         Instant createdAt,
         Instant updatedAt
 ) {
-    public static InsuranceClaimResponse from(InsuranceClaim claim, List<InsuranceClaimEvidence> files, List<String> missing,
-                                              BigDecimal declaredGoodsValue, List<CargoDocumentResponse> cargoDocuments,
-                                              HandoverContextResponse handover) {
-        boolean stale = claim.getSharedRevision() != null && claim.getSharedRevision() < claim.getRevision();
-        return new InsuranceClaimResponse(claim.getId(), claim.getTripId(), claim.getIncidentType(), claim.getOccurredAt(),
-                claim.getDescription(), claim.getClaimedAmount(), claim.getStatus(), claim.getProviderReference(),
-                claim.getRevision(), claim.getSharedRevision(), claim.getSharedAt(),
-                claim.getCarrierAcknowledgedRevision(), claim.getCarrierAcknowledgedAt(), stale,
-                claim.getStatus() == InsuranceClaimStatus.READY_TO_SHARE && missing.isEmpty(), missing,
-                declaredGoodsValue, cargoDocuments, handover,
-                files.stream().map(file -> ClaimEvidenceResponse.from(claim.getId(), file)).toList(),
-                "/api/v1/claims/" + claim.getId() + "/package",
-                claim.getCreatedAt(), claim.getUpdatedAt());
-    }
 }

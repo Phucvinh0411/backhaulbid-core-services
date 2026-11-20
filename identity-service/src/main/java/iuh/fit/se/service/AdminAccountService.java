@@ -5,6 +5,7 @@ import iuh.fit.se.domain.entity.Account;
 import iuh.fit.se.domain.dto.response.AdminAccountResponse;
 import iuh.fit.se.domain.enums.AccountRole;
 import iuh.fit.se.domain.enums.AccountStatus;
+import iuh.fit.se.mapper.AccountMapper;
 import iuh.fit.se.repository.AccountRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,6 +20,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AdminAccountService {
     private final AccountRepository accountRepository;
+    private final AccountMapper accountMapper;
 
     @Transactional(readOnly = true)
     public List<AdminAccountResponse> list(String search, AccountRole role, AccountStatus status) {
@@ -27,7 +29,7 @@ public class AdminAccountService {
                 .filter(account -> role == null || account.getRole() == role)
                 .filter(account -> status == null || account.getStatus() == status)
                 .filter(account -> normalizedSearch.isBlank() || matches(account, normalizedSearch))
-                .map(AdminAccountResponse::from)
+                .map(accountMapper::toAdminAccountResponse)
                 .toList();
     }
 
@@ -39,7 +41,7 @@ public class AdminAccountService {
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
         account.setStatus(request.status());
-        return AdminAccountResponse.from(accountRepository.save(account));
+        return accountMapper.toAdminAccountResponse(accountRepository.save(account));
     }
 
     private boolean matches(Account account, String search) {

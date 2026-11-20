@@ -5,6 +5,7 @@ import iuh.fit.se.domain.dto.request.UpdateEmailRequest;
 import iuh.fit.se.domain.dto.response.CurrentAccountResponse;
 import iuh.fit.se.domain.entity.Account;
 import iuh.fit.se.domain.entity.UserProfile;
+import iuh.fit.se.mapper.AccountMapper;
 import iuh.fit.se.repository.AccountRepository;
 import jakarta.transaction.Transactional;
 import jakarta.validation.Valid;
@@ -26,13 +27,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class AccountController {
     private final AccountRepository accountRepository;
+    private final AccountMapper accountMapper;
 
     @GetMapping("/me")
     public CurrentAccountResponse me(Authentication authentication) {
         UUID accountId = UUID.fromString(authentication.getName());
         Account account = accountRepository.findWithUserProfileById(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
-        return toResponse(account);
+        return accountMapper.toCurrentAccountResponse(account);
     }
 
     @PatchMapping("/me/avatar")
@@ -50,7 +52,7 @@ public class AccountController {
         }
         profile.setAvatarUrl(request.avatarUrl());
         accountRepository.save(account);
-        return toResponse(account);
+        return accountMapper.toCurrentAccountResponse(account);
     }
 
     @PatchMapping("/me/email")
@@ -68,7 +70,7 @@ public class AccountController {
         }
         String normalized = request.email().trim().toLowerCase(Locale.ROOT);
         if (normalized.equalsIgnoreCase(account.getEmail())) {
-            return toResponse(account);
+            return accountMapper.toCurrentAccountResponse(account);
         }
         if (accountRepository.existsByEmailIgnoreCaseAndIdNot(normalized, accountId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Email đã được sử dụng bởi tài khoản khác");
@@ -76,21 +78,6 @@ public class AccountController {
         account.setEmail(normalized);
         account.setEmailVerified(false);
         accountRepository.save(account);
-        return toResponse(account);
-    }
-
-    private CurrentAccountResponse toResponse(Account account) {
-        String fullName = account.getUserProfile() == null ? null : account.getUserProfile().getFullName();
-        String avatarUrl = account.getUserProfile() == null ? null : account.getUserProfile().getAvatarUrl();
-        String provider = account.getAuthProvider() != null ? account.getAuthProvider().name() : "LOCAL";
-        return new CurrentAccountResponse(
-                account.getId(),
-                account.getPhone(),
-                account.getEmail(),
-                account.getRole().name(),
-                fullName,
-                avatarUrl,
-                account.isEmailVerified(),
-                provider);
+        return accountMapper.toCurrentAccountResponse(account);
     }
 }

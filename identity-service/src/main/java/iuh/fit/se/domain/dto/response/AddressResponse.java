@@ -1,7 +1,5 @@
 package iuh.fit.se.domain.dto.response;
 
-import iuh.fit.se.domain.entity.AddressBookEntry;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -24,18 +22,5 @@ public record AddressResponse(
                            String province, String detail, Instant createdAt, Instant updatedAt) {
         this(id, accountId, label, contactName, contactPhone, province, detail, createdAt, updatedAt,
                 null, null, null, null);
-    }
-    public static AddressResponse from(AddressBookEntry entry) {
-        return new AddressResponse(
-                entry.getId(),
-                entry.getAccountId(),
-                entry.getLabel(),
-                entry.getContactName(),
-                entry.getContactPhone(),
-                entry.getProvince(),
-                entry.getDetail(),
-                entry.getCreatedAt(),
-                entry.getUpdatedAt(), entry.getLatitude(), entry.getLongitude(),
-                entry.getCoordinateSource(), entry.getCoordinateConfirmedAt());
     }
 }

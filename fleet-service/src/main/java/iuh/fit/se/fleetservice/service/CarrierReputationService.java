@@ -5,6 +5,7 @@ import iuh.fit.se.fleetservice.domain.entity.CarrierReputationEntry;
 import iuh.fit.se.fleetservice.dto.CarrierReputationEntryResponse;
 import iuh.fit.se.fleetservice.dto.CarrierReputationHistoryResponse;
 import iuh.fit.se.fleetservice.dto.CarrierReputationResponse;
+import iuh.fit.se.fleetservice.mapper.CarrierReputationMapper;
 import iuh.fit.se.fleetservice.repository.CarrierReputationEntryRepository;
 import iuh.fit.se.fleetservice.repository.CarrierReputationRepository;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ public class CarrierReputationService {
 
     private final CarrierReputationRepository reputationRepository;
     private final CarrierReputationEntryRepository entryRepository;
+    private final CarrierReputationMapper carrierReputationMapper;
 
     @Transactional(readOnly = true)
     public CarrierReputationResponse getScore(UUID carrierId) {
@@ -31,18 +33,15 @@ public class CarrierReputationService {
         }
         CarrierReputation reputation = reputationRepository.findById(carrierId)
                 .orElseGet(() -> CarrierReputation.builder().carrierId(carrierId).score(100).build());
-        return toResponse(reputation);
+        return carrierReputationMapper.toResponse(reputation);
     }
 
     @Transactional(readOnly = true)
     public CarrierReputationHistoryResponse getHistory(UUID carrierId) {
         CarrierReputation reputation = reputationRepository.findById(carrierId)
                 .orElseGet(() -> CarrierReputation.builder().carrierId(carrierId).score(100).build());
-        List<CarrierReputationEntryResponse> history = entryRepository
-                .findByCarrierIdOrderByCreatedAtDesc(carrierId)
-                .stream()
-                .map(CarrierReputationEntryResponse::from)
-                .toList();
+        List<CarrierReputationEntryResponse> history = carrierReputationMapper.toEntryResponses(
+                entryRepository.findByCarrierIdOrderByCreatedAtDesc(carrierId));
         return new CarrierReputationHistoryResponse(carrierId, reputation.getScore(), history);
     }
 
@@ -54,7 +53,7 @@ public class CarrierReputationService {
 
         CarrierReputation reputation = ensureInitialized(carrierId);
         if (entryRepository.existsByTripIdAndTier(tripId, tier)) {
-            return toResponse(reputation);
+            return carrierReputationMapper.toResponse(reputation);
         }
 
         int pointsToDeduct = POINTS_BY_TIER[tier];
@@ -69,7 +68,7 @@ public class CarrierReputationService {
                 .scoreAfter(nextScore)
                 .reason("Giao hàng trễ bậc " + tier)
                 .build());
-        return toResponse(reputation);
+        return carrierReputationMapper.toResponse(reputation);
     }
 
     private CarrierReputation ensureInitialized(UUID carrierId) {
@@ -79,9 +78,5 @@ public class CarrierReputationService {
         reputationRepository.createDefaultIfMissing(carrierId);
         return reputationRepository.findByCarrierIdForUpdate(carrierId)
                 .orElseThrow(() -> new IllegalStateException("Carrier reputation could not be initialized"));
-    }
-
-    private CarrierReputationResponse toResponse(CarrierReputation reputation) {
-        return new CarrierReputationResponse(reputation.getCarrierId(), reputation.getScore());
     }
 }

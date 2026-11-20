@@ -1,6 +1,5 @@
 package iuh.fit.se.contractservice.dto;
 
-import iuh.fit.se.contractservice.domain.entity.TrackingLog;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 
 import java.time.Instant;
@@ -13,13 +12,4 @@ public record TrackingResponse(
         TripStatus status,
         Instant recordedAt
 ) {
-    public static TrackingResponse from(TrackingLog trackingLog) {
-        return new TrackingResponse(
-                trackingLog.getId(),
-                trackingLog.getLatitude(),
-                trackingLog.getLongitude(),
-                trackingLog.getStatus(),
-                trackingLog.getRecordedAt()
-        );
-    }
 }

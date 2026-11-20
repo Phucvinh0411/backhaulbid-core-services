@@ -1,7 +1,5 @@
 package iuh.fit.se.contractservice.dto;
 
-import iuh.fit.se.contractservice.domain.entity.TripReview;
-
 import java.time.Instant;
 import java.util.UUID;
 
@@ -15,7 +13,4 @@ public record CarrierReviewItemResponse(
         String comment,
         Instant createdAt
 ) {
-    public static CarrierReviewItemResponse from(TripReview review) {
-        return new CarrierReviewItemResponse(review.getId(), review.getRating(), review.getComment(), review.getCreatedAt());
-    }
 }

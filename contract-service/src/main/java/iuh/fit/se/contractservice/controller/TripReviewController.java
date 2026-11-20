@@ -3,6 +3,7 @@ package iuh.fit.se.contractservice.controller;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
 import iuh.fit.se.contractservice.dto.CreateTripReviewRequest;
 import iuh.fit.se.contractservice.dto.TripReviewResponse;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import iuh.fit.se.contractservice.service.TripReviewService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +32,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class TripReviewController {
     private final TripReviewService reviews;
+    private final TripMapper tripMapper;
 
     /** Creates the shipper's one review of a COMPLETED trip. Responds 201, 403, 404, 409 or 422. */
     @PostMapping
@@ -39,7 +41,7 @@ public class TripReviewController {
                                      @RequestHeader("X-User-Role") String role,
                                      @PathVariable UUID tripId,
                                      @Valid @RequestBody CreateTripReviewRequest request) {
-        return TripReviewResponse.from(reviews.create(accountId, parseRole(role), tripId, request));
+        return tripMapper.toReviewResponse(reviews.create(accountId, parseRole(role), tripId, request));
     }
 
     /** The trip's review, as an array of zero or one item. */
@@ -47,7 +49,7 @@ public class TripReviewController {
     public List<TripReviewResponse> forTrip(@RequestHeader("X-User-Id") UUID accountId,
                                             @RequestHeader("X-User-Role") String role,
                                             @PathVariable UUID tripId) {
-        return reviews.forTrip(accountId, parseRole(role), tripId).stream().map(TripReviewResponse::from).toList();
+        return tripMapper.toReviewResponses(reviews.forTrip(accountId, parseRole(role), tripId));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

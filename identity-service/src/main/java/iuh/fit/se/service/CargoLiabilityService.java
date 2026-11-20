@@ -4,6 +4,7 @@ import iuh.fit.se.domain.entity.Company;
 import iuh.fit.se.domain.entity.InsuranceInfo;
 import iuh.fit.se.domain.enums.VerificationStatus;
 import iuh.fit.se.dto.CargoLiabilityDtos;
+import iuh.fit.se.mapper.CargoLiabilityMapper;
 import iuh.fit.se.repository.CompanyRepository;
 import iuh.fit.se.repository.InsuranceInfoRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class CargoLiabilityService {
     private final CompanyRepository companyRepository;
     private final InsuranceInfoRepository insuranceRepository;
     private final MediaCertificateClient mediaCertificateClient;
+    private final CargoLiabilityMapper cargoLiabilityMapper;
 
     @Transactional
     public CargoLiabilityDtos.Submission submit(String accountId, CargoLiabilityDtos.SubmitRequest request) {
@@ -65,7 +67,7 @@ public class CargoLiabilityService {
                 .status(VerificationStatus.PENDING)
                 .submittedAt(Instant.now())
                 .build();
-        return toSubmission(insuranceRepository.save(row));
+        return cargoLiabilityMapper.toSubmission(insuranceRepository.save(row));
     }
 
     /** Also marks stale VERIFIED rows EXPIRED. Eligibility itself is decided from the dates, not from this mark. */
@@ -83,7 +85,7 @@ public class CargoLiabilityService {
         LocalDate verifiedUntil = CargoLiabilityRules.latestQualifyingExpiry(rows, today);
         CargoLiabilityDtos.Submission latest = insuranceRepository
                 .findFirstByCompany_IdAndCoverageTypeOrderBySubmittedAtDesc(companyId, CARGO_LIABILITY)
-                .map(this::toSubmission)
+                .map(cargoLiabilityMapper::toSubmission)
                 .orElse(null);
         return new CargoLiabilityDtos.Status(verifiedUntil != null, verifiedUntil, latest);
     }
@@ -107,7 +109,7 @@ public class CargoLiabilityService {
         LocalDate today = LocalDate.now();
         rows.getContent().forEach(row -> markExpired(row, today));
         return new CargoLiabilityDtos.ReviewPage(
-                rows.getContent().stream().map(this::toReviewItem).toList(),
+                cargoLiabilityMapper.toReviewItems(rows.getContent()),
                 page,
                 pageSize,
                 rows.getTotalElements(),
@@ -139,7 +141,7 @@ public class CargoLiabilityService {
         }
         row.setVerifiedBy(UUID.fromString(adminId));
         row.setVerifiedAt(Instant.now());
-        return toSubmission(insuranceRepository.save(row));
+        return cargoLiabilityMapper.toSubmission(insuranceRepository.save(row));
     }
 
     /** Admin-only at the controller. Streams the private file through media-service; no public URL is ever built. */
@@ -173,33 +175,5 @@ public class CargoLiabilityService {
         } catch (IllegalArgumentException invalid) {
             throw new IllegalArgumentException("Trạng thái hồ sơ không hợp lệ");
         }
-    }
-
-    private CargoLiabilityDtos.Submission toSubmission(InsuranceInfo row) {
-        return new CargoLiabilityDtos.Submission(
-                row.getId(),
-                row.getStatus() == null ? null : row.getStatus().name(),
-                row.getProviderName(),
-                row.getPolicyNumber(),
-                row.getCoverageLimit(),
-                row.getExpiredDate(),
-                row.getSubmittedAt(),
-                row.getRejectionReason());
-    }
-
-    private CargoLiabilityDtos.ReviewItem toReviewItem(InsuranceInfo row) {
-        Company company = row.getCompany();
-        return new CargoLiabilityDtos.ReviewItem(
-                row.getId(),
-                company.getAccount().getId(),
-                company.getCompanyName(),
-                company.getTaxCode(),
-                row.getProviderName(),
-                row.getPolicyNumber(),
-                row.getCoverageLimit(),
-                row.getExpiredDate(),
-                row.getSubmittedAt(),
-                row.getStatus() == null ? null : row.getStatus().name(),
-                row.getRejectionReason());
     }
 }

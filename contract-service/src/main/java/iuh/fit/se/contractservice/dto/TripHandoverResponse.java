@@ -1,10 +1,7 @@
 package iuh.fit.se.contractservice.dto;
 
-import iuh.fit.se.contractservice.domain.entity.TripHandover;
-
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
@@ -29,15 +26,4 @@ public record TripHandoverResponse(
         Instant shipperConfirmedAt,
         boolean readyForPickup
 ) {
-    public static TripHandoverResponse from(TripHandover handover) {
-        List<String> paths = new ArrayList<>();
-        for (int index = 0; index < handover.getPhotoKeys().size(); index++) {
-            paths.add("/api/v1/trips/" + handover.getTripId() + "/handover/photos/" + index);
-        }
-        return new TripHandoverResponse(handover.getTripId(), handover.getCargoCategory(), handover.getPackageCount(),
-                handover.getGrossWeightKg(), handover.getConditionStatus(), handover.getConditionNote(),
-                handover.getSealNumber(), handover.getPlaceNote(), List.copyOf(paths),
-                handover.getRecordedByType(), handover.getRecordedAt(), handover.getShipperSignerName(),
-                handover.getShipperConfirmedAt(), handover.isReadyForPickup());
-    }
 }

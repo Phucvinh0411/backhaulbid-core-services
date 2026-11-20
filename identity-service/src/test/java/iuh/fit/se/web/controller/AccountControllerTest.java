@@ -5,11 +5,14 @@ import iuh.fit.se.domain.dto.response.CurrentAccountResponse;
 import iuh.fit.se.domain.entity.Account;
 import iuh.fit.se.domain.enums.AccountRole;
 import iuh.fit.se.domain.enums.AuthProvider;
+import iuh.fit.se.mapper.AccountMapper;
 import iuh.fit.se.repository.AccountRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mapstruct.factory.Mappers;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.TestingAuthenticationToken;
@@ -28,6 +31,9 @@ class AccountControllerTest {
 
     @Mock
     private AccountRepository accountRepository;
+
+    @Spy
+    private AccountMapper accountMapper = Mappers.getMapper(AccountMapper.class);
 
     @InjectMocks
     private AccountController controller;

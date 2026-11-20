@@ -5,6 +5,7 @@ import iuh.fit.se.fleetservice.dto.CreateDriverRequest;
 import iuh.fit.se.fleetservice.dto.DriverResponse;
 import iuh.fit.se.fleetservice.dto.UpdateDriverRequest;
 import iuh.fit.se.fleetservice.dto.PublicDriverResponse;
+import iuh.fit.se.fleetservice.mapper.DriverMapper;
 import iuh.fit.se.fleetservice.service.DriverProfileService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -30,6 +31,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class DriverController {
     private final DriverProfileService driverProfileService;
+    private final DriverMapper driverMapper;
 
     @GetMapping("/mine")
     public List<DriverResponse> getMyDrivers(
@@ -38,9 +40,7 @@ public class DriverController {
             @RequestParam(required = false) VerificationStatus status
     ) {
         requireCarrierOrAdmin(role);
-        return driverProfileService.listMine(carrierId, status).stream()
-                .map(DriverResponse::from)
-                .toList();
+        return driverMapper.toResponses(driverProfileService.listMine(carrierId, status));
     }
 
     @GetMapping("/carrier/{carrierId}")
@@ -49,9 +49,7 @@ public class DriverController {
             @RequestHeader("X-User-Role") String role
     ) {
         requireShipperCarrierOrAdmin(role);
-        return driverProfileService.listMine(carrierId, null).stream()
-                .map(PublicDriverResponse::from)
-                .toList();
+        return driverMapper.toPublicResponses(driverProfileService.listMine(carrierId, null));
     }
 
     @PostMapping
@@ -62,7 +60,7 @@ public class DriverController {
     ) {
         requireCarrier(role);
         return ResponseEntity.status(HttpStatus.CREATED)
-                .body(DriverResponse.from(driverProfileService.create(carrierId, request)));
+                .body(driverMapper.toResponse(driverProfileService.create(carrierId, request)));
     }
 
     @PatchMapping("/{driverId}")
@@ -73,7 +71,7 @@ public class DriverController {
             @Valid @RequestBody UpdateDriverRequest request
     ) {
         requireCarrier(role);
-        return DriverResponse.from(driverProfileService.update(carrierId, driverId, request));
+        return driverMapper.toResponse(driverProfileService.update(carrierId, driverId, request));
     }
 
 

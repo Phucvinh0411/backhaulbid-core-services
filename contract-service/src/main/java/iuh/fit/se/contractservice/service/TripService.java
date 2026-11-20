@@ -24,6 +24,7 @@ import iuh.fit.se.contractservice.repository.TripRepository;
 import iuh.fit.se.contractservice.repository.TripDelaySettlementRepository;
 import iuh.fit.se.contractservice.repository.TripTrackingSessionRepository;
 import iuh.fit.se.contractservice.dto.TripDelaySettlementResponse;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -57,6 +58,7 @@ public class TripService {
     private final DriverGrantService driverGrantService;
     private final DriverAccessPolicy driverAccessPolicy;
     private final TripHandoverService tripHandoverService;
+    private final TripMapper tripMapper;
 
     @Transactional(readOnly = true)
     public List<Trip> list(UUID accountId, AccountRole role, TripStatus status) {
@@ -333,13 +335,13 @@ public class TripService {
     @Transactional(readOnly = true)
     public List<TripDelaySettlementResponse> delaySettlements(UUID accountId, AccountRole role, UUID tripId) {
         Trip trip = get(accountId, role, tripId);
-        return tripDelaySettlementRepository.findByTripIdOrderByTierAsc(trip.getId()).stream()
-                .map(TripDelaySettlementResponse::from).toList();
+        return tripMapper.toDelaySettlementResponses(
+                tripDelaySettlementRepository.findByTripIdOrderByTierAsc(trip.getId()));
     }
 
     @Transactional(readOnly = true)
     public List<TripDelaySettlementResponse> allDelaySettlementsForAdmin() {
-        return lateDeliveryService.listForAdmin().stream().map(TripDelaySettlementResponse::from).toList();
+        return tripMapper.toDelaySettlementResponses(lateDeliveryService.listForAdmin());
     }
 
     private Trip lock(UUID accountId, AccountRole role, UUID tripId) {

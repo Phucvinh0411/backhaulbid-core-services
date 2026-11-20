@@ -3,6 +3,7 @@ package iuh.fit.se.service;
 import iuh.fit.se.domain.dto.request.AddressRequest;
 import iuh.fit.se.domain.dto.response.AddressResponse;
 import iuh.fit.se.domain.entity.AddressBookEntry;
+import iuh.fit.se.mapper.AddressMapper;
 import iuh.fit.se.repository.AddressBookRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,13 +20,12 @@ import java.time.Instant;
 public class AddressBookService {
 
     private final AddressBookRepository addressBookRepository;
+    private final AddressMapper addressMapper;
 
     @Transactional(readOnly = true)
     public List<AddressResponse> list(UUID accountId) {
-        return addressBookRepository.findAllByAccountIdOrderByUpdatedAtDesc(accountId)
-                .stream()
-                .map(AddressResponse::from)
-                .toList();
+        return addressMapper.toResponses(
+                addressBookRepository.findAllByAccountIdOrderByUpdatedAtDesc(accountId));
     }
 
     @Transactional
@@ -40,7 +40,7 @@ public class AddressBookService {
                 .build();
         applyCoordinates(entry, request);
 
-        return AddressResponse.from(addressBookRepository.save(entry));
+        return addressMapper.toResponse(addressBookRepository.save(entry));
     }
 
     @Transactional
@@ -52,7 +52,7 @@ public class AddressBookService {
         entry.setProvince(request.province().trim());
         entry.setDetail(request.detail().trim());
         applyCoordinates(entry, request);
-        return AddressResponse.from(addressBookRepository.save(entry));
+        return addressMapper.toResponse(addressBookRepository.save(entry));
     }
 
     @Transactional

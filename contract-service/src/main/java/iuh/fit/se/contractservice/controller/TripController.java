@@ -16,6 +16,7 @@ import iuh.fit.se.contractservice.dto.CreateTripLocationRequest;
 import iuh.fit.se.contractservice.dto.TripLocationResponse;
 import iuh.fit.se.contractservice.dto.CancelLateTripRequest;
 import iuh.fit.se.contractservice.dto.TripDelaySettlementResponse;
+import iuh.fit.se.contractservice.mapper.TripMapper;
 import iuh.fit.se.contractservice.service.TripService;
 import iuh.fit.se.contractservice.service.TripClaimService;
 import iuh.fit.se.contractservice.dto.ClaimTripRequest;
@@ -41,6 +42,7 @@ import java.util.UUID;
 public class TripController {
     private final TripService tripService;
     private final TripClaimService tripClaimService;
+    private final TripMapper tripMapper;
 
     @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> businessError(
@@ -59,7 +61,7 @@ public class TripController {
             @PathVariable UUID tripId,
             @Valid @RequestBody ClaimTripRequest request
     ) {
-        return TripResponse.from(tripClaimService.claim(accountId, parseRole(role), tripId, request.pin()));
+        return tripMapper.toResponse(tripClaimService.claim(accountId, parseRole(role), tripId, request.pin()));
     }
 
     @GetMapping("/mine")
@@ -68,7 +70,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @RequestParam(required = false) TripStatus status
     ) {
-        return tripService.list(accountId, parseRole(role), status).stream().map(TripResponse::from).toList();
+        return tripMapper.toResponses(tripService.list(accountId, parseRole(role), status));
     }
 
     @GetMapping("/{tripId}")
@@ -77,7 +79,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID tripId
     ) {
-        return TripResponse.from(tripService.get(accountId, parseRole(role), tripId));
+        return tripMapper.toResponse(tripService.get(accountId, parseRole(role), tripId));
     }
 
     @PatchMapping("/{tripId}/status")
@@ -87,7 +89,7 @@ public class TripController {
             @PathVariable UUID tripId,
             @Valid @RequestBody UpdateTripStatusRequest request
     ) {
-        return TripResponse.from(tripService.updateStatus(accountId, parseRole(role), tripId, request));
+        return tripMapper.toResponse(tripService.updateStatus(accountId, parseRole(role), tripId, request));
     }
 
     @PostMapping("/{tripId}/cancel-late")
@@ -97,7 +99,7 @@ public class TripController {
             @PathVariable UUID tripId,
             @Valid @RequestBody CancelLateTripRequest request
     ) {
-        return TripResponse.from(tripService.cancelForLateDelivery(accountId, parseRole(role), tripId, request.reason()));
+        return tripMapper.toResponse(tripService.cancelForLateDelivery(accountId, parseRole(role), tripId, request.reason()));
     }
 
     @GetMapping("/{tripId}/delay-settlements")
@@ -151,7 +153,7 @@ public class TripController {
             @PathVariable UUID tripId,
             @Valid @RequestBody CreateTrackingRequest request
     ) {
-        return TrackingResponse.from(tripService.addTracking(accountId, parseRole(role), tripId, request));
+        return tripMapper.toTrackingResponse(tripService.addTracking(accountId, parseRole(role), tripId, request));
     }
 
     @PostMapping("/{tripId}/journey-events")
@@ -161,7 +163,7 @@ public class TripController {
             @PathVariable UUID tripId,
             @Valid @RequestBody CreateJourneyEventRequest request
     ) {
-        return JourneyEventResponse.from(tripService.addJourneyEvent(accountId, parseRole(role), tripId, request));
+        return tripMapper.toJourneyEventResponse(tripService.addJourneyEvent(accountId, parseRole(role), tripId, request));
     }
 
     @GetMapping("/{tripId}/journey-events")
@@ -170,8 +172,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID tripId
     ) {
-        return tripService.journey(accountId, parseRole(role), tripId).stream()
-                .map(JourneyEventResponse::from).toList();
+        return tripMapper.toJourneyEventResponses(tripService.journey(accountId, parseRole(role), tripId));
     }
 
     @PostMapping("/{tripId}/delivery-proofs")
@@ -181,7 +182,7 @@ public class TripController {
             @PathVariable UUID tripId,
             @Valid @RequestBody CreateDeliveryProofRequest request
     ) {
-        return DeliveryProofResponse.from(tripService.addDeliveryProof(accountId, parseRole(role), tripId, request));
+        return tripMapper.toDeliveryProofResponse(tripService.addDeliveryProof(accountId, parseRole(role), tripId, request));
     }
 
     @GetMapping("/{tripId}/delivery-proofs")
@@ -190,8 +191,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID tripId
     ) {
-        return tripService.proofs(accountId, parseRole(role), tripId).stream()
-                .map(DeliveryProofResponse::from).toList();
+        return tripMapper.toDeliveryProofResponses(tripService.proofs(accountId, parseRole(role), tripId));
     }
 
     @PostMapping("/{tripId}/locations")
@@ -201,7 +201,7 @@ public class TripController {
             @PathVariable UUID tripId,
             @Valid @RequestBody CreateTripLocationRequest request
     ) {
-        return TripLocationResponse.from(tripService.addLocation(accountId, parseRole(role), tripId, request));
+        return tripMapper.toLocationResponse(tripService.addLocation(accountId, parseRole(role), tripId, request));
     }
 
     @GetMapping("/{tripId}/locations")
@@ -210,8 +210,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID tripId
     ) {
-        return tripService.locations(accountId, parseRole(role), tripId).stream()
-                .map(TripLocationResponse::from).toList();
+        return tripMapper.toLocationResponses(tripService.locations(accountId, parseRole(role), tripId));
     }
 
     @GetMapping("/{tripId}/locations/latest")
@@ -220,8 +219,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID tripId
     ) {
-        var latest = tripService.latestLocation(accountId, parseRole(role), tripId);
-        return latest == null ? null : TripLocationResponse.from(latest);
+        return tripMapper.toLocationResponse(tripService.latestLocation(accountId, parseRole(role), tripId));
     }
 
     private AccountRole parseRole(String role) {

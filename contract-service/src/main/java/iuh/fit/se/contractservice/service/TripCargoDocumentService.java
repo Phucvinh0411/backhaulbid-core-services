@@ -10,6 +10,7 @@ import iuh.fit.se.contractservice.dto.AddCargoDocumentRequest;
 import iuh.fit.se.contractservice.dto.CargoDocumentResponse;
 import iuh.fit.se.contractservice.dto.CargoDocumentsResponse;
 import iuh.fit.se.contractservice.dto.CargoValueDocumentRef;
+import iuh.fit.se.contractservice.mapper.InsuranceClaimMapper;
 import iuh.fit.se.contractservice.repository.TripCargoDocumentRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
 import iuh.fit.se.contractservice.service.driveraccess.UuidV7;
@@ -36,14 +37,16 @@ public class TripCargoDocumentService {
     private final TripRepository trips;
     private final TripCargoDocumentRepository documents;
     private final MediaEvidenceClient media;
+    private final InsuranceClaimMapper claimMapper;
     private final Clock clock;
     private final UuidV7 ids;
 
     public TripCargoDocumentService(TripRepository trips, TripCargoDocumentRepository documents,
-                                    MediaEvidenceClient media, Clock clock) {
+                                    MediaEvidenceClient media, InsuranceClaimMapper claimMapper, Clock clock) {
         this.trips = trips;
         this.documents = documents;
         this.media = media;
+        this.claimMapper = claimMapper;
         this.clock = clock;
         this.ids = new UuidV7(clock, new SecureRandom());
     }
@@ -86,7 +89,7 @@ public class TripCargoDocumentService {
                 trip.getDeclaredGoodsValue(),
                 trip.getCargoSnapshotHash() != null,
                 rows.stream().anyMatch(row -> row.getKind().isValueProof()),
-                rows.stream().map(CargoDocumentResponse::from).toList());
+                claimMapper.toCargoDocumentResponses(rows));
     }
 
     /**
@@ -128,7 +131,7 @@ public class TripCargoDocumentService {
                 .uploadedBy(accountId)
                 .uploadedAt(clock.instant())
                 .build());
-        return CargoDocumentResponse.from(saved);
+        return claimMapper.toCargoDocumentResponse(saved);
     }
 
     /** One document's bytes. The row must belong to this trip, so an id from another trip reads as not found. */

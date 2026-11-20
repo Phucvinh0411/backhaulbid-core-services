@@ -1,8 +1,5 @@
 package iuh.fit.se.contractservice.dto;
 
-import iuh.fit.se.contractservice.domain.entity.InsuranceClaim;
-import iuh.fit.se.contractservice.domain.entity.InsuranceClaimEvidence;
-import iuh.fit.se.contractservice.domain.entity.TripCargoDocument;
 import iuh.fit.se.contractservice.domain.enums.CargoDocumentKind;
 import iuh.fit.se.contractservice.domain.enums.CargoDocumentSource;
 import iuh.fit.se.contractservice.domain.enums.ClaimEvidenceKind;
@@ -40,18 +37,5 @@ public record CarrierClaimResponse(
     }
 
     public record EvidenceItem(ClaimEvidenceKind kind, Instant uploadedAt) {
-    }
-
-    public static CarrierClaimResponse from(InsuranceClaim claim, List<TripCargoDocument> cargo,
-                                            List<InsuranceClaimEvidence> files, HandoverContextResponse handover) {
-        return new CarrierClaimResponse(claim.getId(), claim.getTripId(), claim.getIncidentType(), claim.getOccurredAt(),
-                claim.getDescription(), claim.getClaimedAmount(), claim.getStatus(), claim.getSharedRevision(),
-                claim.getSharedAt(), claim.getCarrierAcknowledgedAt(),
-                claim.getCarrierAcknowledgedRevision() != null
-                        && claim.getCarrierAcknowledgedRevision().equals(claim.getSharedRevision()),
-                cargo.stream().map(row -> new CargoItem(row.getKind(), row.getSource(), row.getUploadedAt())).toList(),
-                handover,
-                files.stream().map(file -> new EvidenceItem(file.getKind(), file.getUploadedAt())).toList(),
-                "/api/v1/claims/" + claim.getId() + "/package");
     }
 }
