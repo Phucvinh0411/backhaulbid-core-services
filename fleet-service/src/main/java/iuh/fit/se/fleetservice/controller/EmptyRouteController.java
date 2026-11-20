@@ -1,7 +1,8 @@
 package iuh.fit.se.fleetservice.controller;
 
-import iuh.fit.se.fleetservice.domain.entity.EmptyRoute;
 import iuh.fit.se.fleetservice.dto.EmptyRouteRequest;
+import iuh.fit.se.fleetservice.dto.EmptyRouteResponse;
+import iuh.fit.se.fleetservice.mapper.EmptyRouteMapper;
 import iuh.fit.se.fleetservice.service.EmptyRouteService;
 import iuh.fit.se.fleetservice.service.IdentityVerificationClient;
 import iuh.fit.se.fleetservice.service.MatchingService;
@@ -22,25 +23,27 @@ public class EmptyRouteController {
 
     private final EmptyRouteService emptyRouteService;
     private final IdentityVerificationClient identityVerificationClient;
+    private final EmptyRouteMapper emptyRouteMapper;
 
     @GetMapping
-    public List<EmptyRoute> listMine(
+    public List<EmptyRouteResponse> listMine(
             @RequestHeader("X-User-Id") UUID carrierId,
             @RequestHeader("X-User-Role") String role
     ) {
         requireCarrierOrAdmin(role);
-        return emptyRouteService.listMine(carrierId.toString());
+        return emptyRouteMapper.toResponses(emptyRouteService.listMine(carrierId.toString()));
     }
 
     @PostMapping
-    public ResponseEntity<EmptyRoute> declareEmptyRoute(
+    public ResponseEntity<EmptyRouteResponse> declareEmptyRoute(
             @RequestHeader("X-User-Id") UUID carrierId,
             @RequestHeader("X-User-Role") String role,
             @Valid @RequestBody EmptyRouteRequest request
     ) {
         requireCarrier(role);
-        EmptyRoute emptyRoute = emptyRouteService.createEmptyRoute(request, carrierId.toString());
-        return ResponseEntity.status(HttpStatus.CREATED).body(emptyRoute);
+        EmptyRouteResponse response = emptyRouteMapper.toResponse(
+                emptyRouteService.createEmptyRoute(request, carrierId.toString()));
+        return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
     @PostMapping("/optimal-matching")

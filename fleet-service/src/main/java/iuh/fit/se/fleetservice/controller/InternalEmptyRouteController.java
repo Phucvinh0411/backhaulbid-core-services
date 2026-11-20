@@ -1,6 +1,7 @@
 package iuh.fit.se.fleetservice.controller;
 
-import iuh.fit.se.fleetservice.domain.entity.EmptyRoute;
+import iuh.fit.se.fleetservice.dto.EmptyRouteResponse;
+import iuh.fit.se.fleetservice.mapper.EmptyRouteMapper;
 import iuh.fit.se.fleetservice.service.EmptyRouteService;
 import iuh.fit.se.fleetservice.service.MatchingService;
 import lombok.RequiredArgsConstructor;
@@ -21,12 +22,13 @@ import java.util.Map;
 public class InternalEmptyRouteController {
 
     private final EmptyRouteService emptyRouteService;
+    private final EmptyRouteMapper emptyRouteMapper;
 
     @Value("${app.internal-token:${INTERNAL_SERVICE_TOKEN:}}")
     private String expectedToken;
 
     @PostMapping("/match")
-    public ResponseEntity<List<EmptyRoute>> findMatchingRoutes(
+    public ResponseEntity<List<EmptyRouteResponse>> findMatchingRoutes(
             @RequestHeader(value = "X-Internal-Token", required = false) String token,
             @RequestBody Map<String, Object> request
     ) {
@@ -34,7 +36,8 @@ public class InternalEmptyRouteController {
         String origin = (String) request.get("origin");
         String destination = (String) request.get("destination");
 
-        List<EmptyRoute> matches = emptyRouteService.findMatchingRoutes(origin, destination, request);
+        List<EmptyRouteResponse> matches = emptyRouteMapper.toResponses(
+                emptyRouteService.findMatchingRoutes(origin, destination, request));
         return ResponseEntity.ok(matches);
     }
 
