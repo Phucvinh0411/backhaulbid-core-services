@@ -8,5 +8,7 @@ public record CurrentAccountResponse(
         String email,
         String role,
         String fullName,
-        String avatarUrl) {
+        String avatarUrl,
+        boolean emailVerified,
+        String authProvider) {
 }

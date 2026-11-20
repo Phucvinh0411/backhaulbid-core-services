@@ -69,12 +69,6 @@ public class VehicleService {
     }
 
     @Transactional
-    public List<Vehicle> createBulk(UUID carrierId, List<CreateVehicleRequest> requests) {
-        validateBulkSize(requests);
-        return requests.stream().map(request -> create(carrierId, request)).toList();
-    }
-
-    @Transactional
     public Vehicle update(UUID carrierId, UUID vehicleId, UpdateVehicleRequest request) {
         Vehicle vehicle = findOwned(carrierId, vehicleId);
         String licensePlate = normalize(request.licensePlate());
@@ -187,11 +181,5 @@ public class VehicleService {
 
     private boolean safeEquals(String left, String right) {
         return left == null ? right == null : left.equals(right);
-    }
-
-    private void validateBulkSize(List<?> requests) {
-        if (requests == null || requests.isEmpty() || requests.size() > 500) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Bulk import must contain 1 to 500 records");
-        }
     }
 }

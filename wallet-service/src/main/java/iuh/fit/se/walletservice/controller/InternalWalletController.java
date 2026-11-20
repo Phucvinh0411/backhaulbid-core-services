@@ -2,6 +2,7 @@ package iuh.fit.se.walletservice.controller;
 
 import iuh.fit.se.walletservice.domain.operation.InternalWalletOperation;
 import iuh.fit.se.walletservice.dto.request.InternalWalletOperationRequest;
+import iuh.fit.se.walletservice.dto.request.InternalWalletReleaseByKeyRequest;
 import iuh.fit.se.walletservice.dto.request.InternalWalletReleaseRequest;
 import iuh.fit.se.walletservice.dto.request.InternalWalletSettlementRequest;
 import iuh.fit.se.walletservice.dto.response.InternalWalletOperationResponse;
@@ -19,6 +20,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.math.BigDecimal;
 import java.util.UUID;
 
 /**
@@ -89,6 +91,24 @@ public class InternalWalletController {
         authorize(token);
         InternalWalletOperation operation = internalWalletService.release(holdId, request);
         return internalWalletOperationMapper.toResponse(operation);
+    }
+
+    /** Releases an orphaned hold by its original hold idempotency key for Saga crash recovery. */
+    @PostMapping("/wallet-holds/release-by-key")
+    public InternalWalletOperationResponse releaseByHoldKey(
+            @RequestHeader(value = "X-Internal-Token", required = false) String token,
+            @Valid @RequestBody InternalWalletReleaseByKeyRequest request) {
+        authorize(token);
+        return internalWalletService.releaseByHoldKey(
+                        request.holdIdempotencyKey(),
+                        new InternalWalletReleaseRequest(request.idempotencyKey()))
+                .map(internalWalletOperationMapper::toResponse)
+                .orElseGet(() -> new InternalWalletOperationResponse(
+                        "NO_OP",
+                        null,
+                        null,
+                        BigDecimal.ZERO,
+                        "No active hold found for key " + request.holdIdempotencyKey()));
     }
 
     /** Converts a deposit hold into a penalty transaction when registration fails. */

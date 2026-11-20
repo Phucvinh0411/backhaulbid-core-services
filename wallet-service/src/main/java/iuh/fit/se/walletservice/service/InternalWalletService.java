@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Coordinates wallet mutations while keeping idempotency and transaction rules in one place. */
@@ -106,6 +107,24 @@ public class InternalWalletService {
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw failure(exception.getMessage());
         }
+    }
+
+    /**
+     * Saga compensation: releases an orphaned hold by its original hold idempotencyKey
+     * when the caller crashed before receiving or persisting holdId. Returns empty if
+     * the hold never reached wallet-service so no spurious transaction is created.
+     */
+    @Transactional
+    public Optional<InternalWalletOperation> releaseByHoldKey(
+            String holdIdempotencyKey,
+            InternalWalletReleaseRequest request) {
+        Transaction hold = findByOperationKey(holdIdempotencyKey);
+        if (hold == null
+                || hold.getType() != TransactionType.FREEZE
+                || hold.getStatus() != TransactionStatus.SUCCESS) {
+            return Optional.empty();
+        }
+        return Optional.of(release(hold.getId(), request));
     }
 
     /** Converts the frozen deposit into a penalty after a forfeiture decision. */

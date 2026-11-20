@@ -78,6 +78,56 @@ public class JwtTokenProvider {
         return jwtExpirationMs / 1000;
     }
 
+    public String generateGoogleOnboardingToken(GoogleUserInfo googleUser) {
+        Date now = new Date();
+        Date expiryDate = new Date(now.getTime() + 15 * 60 * 1000L);
+        return Jwts.builder()
+                .setSubject(googleUser.sub())
+                .setIssuer("backhaulbid-identity")
+                .setAudience("backhaulbid-google-onboarding")
+                .claim("purpose", "GOOGLE_REGISTER")
+                .claim("email", googleUser.email())
+                .claim("name", googleUser.fullName())
+                .claim("picture", googleUser.avatarUrl())
+                .setIssuedAt(now)
+                .setExpiration(expiryDate)
+                .signWith(getSigningKey(), SignatureAlgorithm.HS256)
+                .compact();
+    }
+
+    public GoogleUserInfo parseGoogleOnboardingToken(String token) {
+        try {
+            Claims claims = Jwts.parserBuilder()
+                    .setSigningKey(getSigningKey())
+                    .requireIssuer("backhaulbid-identity")
+                    .requireAudience("backhaulbid-google-onboarding")
+                    .build()
+                    .parseClaimsJws(token)
+                    .getBody();
+            if (!"GOOGLE_REGISTER".equals(claims.get("purpose", String.class))) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED,
+                        "Phiên đăng ký Google không hợp lệ");
+            }
+            String sub = claims.getSubject();
+            String email = claims.get("email", String.class);
+            if (sub == null || sub.isBlank() || email == null || email.isBlank()) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED,
+                        "Phiên đăng ký Google không hợp lệ");
+            }
+            return new GoogleUserInfo(
+                    sub,
+                    email,
+                    claims.get("name", String.class),
+                    claims.get("picture", String.class));
+        } catch (JwtException | IllegalArgumentException ex) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED,
+                    "Phiên đăng ký Google không hợp lệ hoặc đã hết hạn");
+        }
+    }
+
     // Tạo Refresh Token và lưu Database
     public RefreshToken generateRefreshToken(Account account) {
         RefreshToken refreshToken = new RefreshToken();
@@ -90,11 +140,14 @@ public class JwtTokenProvider {
 
     public RefreshToken validateRefreshToken(String token) {
         RefreshToken refreshToken = refreshTokenRepository.findByToken(token)
-                .orElseThrow(() -> new RuntimeException("Refresh token không tồn tại!"));
-        
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.UNAUTHORIZED, "Refresh token không tồn tại!"));
+
         if (refreshToken.getExpiryDate().compareTo(Instant.now()) < 0) {
             refreshTokenRepository.delete(refreshToken);
-            throw new RuntimeException("Refresh token đã hết hạn. Vui lòng đăng nhập lại!");
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED,
+                    "Refresh token đã hết hạn. Vui lòng đăng nhập lại!");
         }
         return refreshToken;
     }

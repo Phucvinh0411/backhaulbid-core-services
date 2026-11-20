@@ -51,6 +51,22 @@ spring:
     password: ${RABBITMQ_PASSWORD:guest}
     virtual-host: /
 
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:true}
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 eureka:
   client:
     service-url:
@@ -80,3 +96,10 @@ app:
   tracking:
     # Optional OSRM-compatible provider. Empty keeps pins/GPS/timeline usable.
     routing-base-url: ${ROUTING_BASE_URL:}
+  mail:
+    enabled: ${CONTRACT_OTP_MAIL_ENABLED:true}
+    from: ${MAIL_FROM:no-reply@backhaulbid.vn}
+    from-name: ${MAIL_FROM_NAME:BackhaulBid}
+    otp-ttl-seconds: ${CONTRACT_OTP_TTL_SECONDS:600}
+    otp-resend-cooldown-seconds: ${CONTRACT_OTP_RESEND_COOLDOWN_SECONDS:60}
+    otp-max-attempts: ${CONTRACT_OTP_MAX_ATTEMPTS:5}

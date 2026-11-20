@@ -39,6 +39,7 @@ public class CargoLiabilityService {
     @Transactional
     public CargoLiabilityDtos.Submission submit(String accountId, CargoLiabilityDtos.SubmitRequest request) {
         Company company = companyOf(accountId)
+                .filter(c -> c.getVerificationStatus() == VerificationStatus.VERIFIED)
                 .orElseThrow(() -> new IllegalStateException(
                         "Vui lòng hoàn tất xác minh doanh nghiệp trước khi gửi chứng từ bảo hiểm"));
         if (!CargoLiabilityRules.isCertificateKey(request.certificateKey())) {

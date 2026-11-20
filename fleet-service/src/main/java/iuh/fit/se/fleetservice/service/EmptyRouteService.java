@@ -17,6 +17,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
 import java.util.*;
@@ -26,12 +27,14 @@ import java.util.*;
 @Slf4j
 public class EmptyRouteService {
 
+    static final ZoneId VN_ZONE = ZoneId.of("Asia/Ho_Chi_Minh");
     private static final double EARTH_RADIUS_KM = 6371.0;
     private static final int    DEFAULT_SEARCH_RADIUS_KM = 50;
 
     private final EmptyRouteRepository emptyRouteRepository;
     private final iuh.fit.se.fleetservice.repository.VehicleRepository vehicleRepository;
     private final MatchingService matchingService;
+    private final IdentityVerificationClient identityVerificationClient;
 
     // ══════════════════════════════════════════════════════════════════
     //  Chủ nhà xe đăng ký tuyến chạy rỗng
@@ -39,6 +42,13 @@ public class EmptyRouteService {
     @Transactional
     public EmptyRoute createEmptyRoute(EmptyRouteRequest request, String ownerCompanyId) {
         log.info("Đăng ký tuyến chạy rỗng mới cho xe: {}", request.getTruckId());
+        UUID ownerAccountId;
+        try {
+            ownerAccountId = UUID.fromString(ownerCompanyId);
+        } catch (IllegalArgumentException | NullPointerException exception) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Tài khoản không hợp lệ");
+        }
+        identityVerificationClient.assertVerified(ownerAccountId);
 
         Vehicle vehicle = resolveOwnedVehicle(request.getTruckId(), ownerCompanyId);
 
@@ -111,6 +121,7 @@ public class EmptyRouteService {
                 .findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING);
 
         List<ScoredRoute> scoredMatches = new ArrayList<>();
+        LocalDateTime now = LocalDateTime.now(VN_ZONE);
 
         for (EmptyRoute route : candidates) {
             try {
@@ -127,7 +138,7 @@ public class EmptyRouteService {
                 }
 
                 // ── 2. Thời gian xe rỗng chưa quá hạn ──
-                if (route.getExpectedEmptyTime().isBefore(LocalDateTime.now())) {
+                if (route.getExpectedEmptyTime().isBefore(now)) {
                     log.debug("Loại route {} - thời gian rỗng đã quá hạn", route.getId());
                     continue;
                 }
@@ -197,11 +208,20 @@ public class EmptyRouteService {
     // ══════════════════════════════════════════════════════════════════
     @Transactional(readOnly = true)
     public MatchingService.MatchingResult findOptimalMatching(List<MatchingService.Order> orders) {
-        List<EmptyRoute> candidates = emptyRouteRepository
-                .findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING);
+        return findOptimalMatching(orders, null);
+    }
+
+    @Transactional(readOnly = true)
+    public MatchingService.MatchingResult findOptimalMatching(List<MatchingService.Order> orders, String companyId) {
+        List<EmptyRoute> candidates = (companyId == null || companyId.isBlank())
+                ? emptyRouteRepository.findByStatusOrderByExpectedEmptyTimeAsc(EmptyRouteStatus.PENDING)
+                : emptyRouteRepository.findByCompanyIdOrderByExpectedEmptyTimeAsc(companyId).stream()
+                        .filter(route -> route.getStatus() == EmptyRouteStatus.PENDING
+                                && companyId.equalsIgnoreCase(route.getCompanyId()))
+                        .toList();
 
         List<EmptyRoute> validRoutes = new ArrayList<>();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(VN_ZONE);
         for (EmptyRoute route : candidates) {
             if (route.getExpectedEmptyTime() != null && route.getExpectedEmptyTime().isBefore(now)) {
                 continue;
@@ -344,7 +364,7 @@ public class EmptyRouteService {
         catch (IllegalArgumentException ex) { return Optional.empty(); }
     }
 
-    private Optional<LocalDateTime> parseLatestPickup(Map<String, Object> auctionData) {
+    static Optional<LocalDateTime> parseLatestPickup(Map<String, Object> auctionData) {
         Object raw = auctionData.get("latestPickup");
         if (raw == null) return Optional.empty();
         String value = raw.toString().trim();
@@ -353,7 +373,10 @@ public class EmptyRouteService {
         try { return Optional.of(LocalDateTime.parse(value)); }
         catch (DateTimeParseException ignored) {}
 
-        try { return Optional.of(Instant.parse(value).atZone(ZoneId.systemDefault()).toLocalDateTime()); }
+        try { return Optional.of(Instant.parse(value).atZone(VN_ZONE).toLocalDateTime()); }
+        catch (DateTimeParseException ignored) {}
+
+        try { return Optional.of(OffsetDateTime.parse(value).atZoneSameInstant(VN_ZONE).toLocalDateTime()); }
         catch (DateTimeParseException ignored) {}
 
         return Optional.empty();

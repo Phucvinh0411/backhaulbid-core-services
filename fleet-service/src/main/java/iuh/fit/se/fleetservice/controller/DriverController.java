@@ -65,21 +65,6 @@ public class DriverController {
                 .body(DriverResponse.from(driverProfileService.create(carrierId, request)));
     }
 
-
-
-    @PostMapping("/bulk")
-    public ResponseEntity<List<DriverResponse>> createBulk(
-            @RequestHeader("X-User-Id") UUID carrierId,
-            @RequestHeader("X-User-Role") String role,
-            @RequestBody List<@Valid CreateDriverRequest> requests
-    ) {
-        requireCarrier(role);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(driverProfileService.createBulk(carrierId, requests).stream().map(DriverResponse::from).toList());
-    }
-
-
-
     @PatchMapping("/{driverId}")
     public DriverResponse update(
             @RequestHeader("X-User-Id") UUID carrierId,

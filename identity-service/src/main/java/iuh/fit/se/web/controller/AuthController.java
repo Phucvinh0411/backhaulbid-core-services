@@ -1,8 +1,11 @@
 package iuh.fit.se.web.controller;
 
+import iuh.fit.se.domain.dto.request.CompleteGoogleRegistrationRequest;
+import iuh.fit.se.domain.dto.request.GoogleLoginRequest;
 import iuh.fit.se.domain.dto.request.LoginRequest;
 import iuh.fit.se.domain.dto.request.RegisterRequest;
 import iuh.fit.se.domain.dto.response.AuthResponse;
+import iuh.fit.se.domain.dto.response.GoogleAuthResponse;
 import iuh.fit.se.service.AuthService;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -47,22 +50,42 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request, HttpServletResponse response) {
         AuthResponse authResponse = authService.login(request);
+        addAuthCookies(response, authResponse);
+        return ResponseEntity.ok(authResponse);
+    }
 
-        // Set HttpOnly Cookie cho accessToken (15 phút)
+    @PostMapping("/google")
+    public ResponseEntity<GoogleAuthResponse> googleLogin(
+            @Valid @RequestBody GoogleLoginRequest request,
+            HttpServletResponse response) {
+        GoogleAuthResponse result = authService.loginWithGoogle(request);
+        if (!result.needsOnboarding() && result.auth() != null) {
+            addAuthCookies(response, result.auth());
+        }
+        return ResponseEntity.ok(result);
+    }
+
+    @PostMapping("/google/complete")
+    public ResponseEntity<AuthResponse> completeGoogleRegistration(
+            @Valid @RequestBody CompleteGoogleRegistrationRequest request,
+            HttpServletResponse response) {
+        AuthResponse authResponse = authService.completeGoogleRegistration(request);
+        addAuthCookies(response, authResponse);
+        return ResponseEntity.ok(authResponse);
+    }
+
+    private void addAuthCookies(HttpServletResponse response, AuthResponse authResponse) {
         Cookie accessToken = new Cookie("accessToken", authResponse.getAccessToken());
         accessToken.setHttpOnly(true);
         accessToken.setPath("/");
         accessToken.setMaxAge(15 * 60);
         response.addCookie(accessToken);
 
-        // Set HttpOnly Cookie cho refreshToken (7 ngày)
         Cookie refreshToken = new Cookie("refreshToken", authResponse.getRefreshToken());
         refreshToken.setHttpOnly(true);
         refreshToken.setPath("/");
         refreshToken.setMaxAge(7 * 24 * 60 * 60);
         response.addCookie(refreshToken);
-
-        return ResponseEntity.ok(authResponse);
     }
 
     @PostMapping("/refresh")

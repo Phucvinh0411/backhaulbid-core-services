@@ -3,6 +3,7 @@ package iuh.fit.se.fleetservice.controller;
 import iuh.fit.se.fleetservice.domain.entity.EmptyRoute;
 import iuh.fit.se.fleetservice.dto.EmptyRouteRequest;
 import iuh.fit.se.fleetservice.service.EmptyRouteService;
+import iuh.fit.se.fleetservice.service.IdentityVerificationClient;
 import iuh.fit.se.fleetservice.service.MatchingService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,6 +21,7 @@ import java.util.UUID;
 public class EmptyRouteController {
 
     private final EmptyRouteService emptyRouteService;
+    private final IdentityVerificationClient identityVerificationClient;
 
     @GetMapping
     public List<EmptyRoute> listMine(
@@ -43,11 +45,16 @@ public class EmptyRouteController {
 
     @PostMapping("/optimal-matching")
     public ResponseEntity<MatchingService.MatchingResult> findOptimalMatching(
+            @RequestHeader("X-User-Id") UUID callerId,
             @RequestHeader("X-User-Role") String role,
             @RequestBody List<MatchingService.Order> orders
     ) {
         requireCarrierOrAdmin(role);
-        return ResponseEntity.ok(emptyRouteService.findOptimalMatching(orders));
+        if ("CARRIER".equalsIgnoreCase(role)) {
+            identityVerificationClient.assertVerified(callerId);
+            return ResponseEntity.ok(emptyRouteService.findOptimalMatching(orders, callerId.toString()));
+        }
+        return ResponseEntity.ok(emptyRouteService.findOptimalMatching(orders, null));
     }
 
     @DeleteMapping("/{id}")

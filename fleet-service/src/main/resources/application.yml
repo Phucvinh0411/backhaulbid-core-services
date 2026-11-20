@@ -1,5 +1,7 @@
 server:
   port: ${SERVER_PORT:8082}
+  error:
+    include-message: always
 
 spring:
   application:
@@ -65,3 +67,6 @@ springdoc:
     enabled: ${SWAGGER_ENABLED:false}
     path: /swagger-ui.html
     disable-swagger-default-url: true
+
+app:
+  internal-token: ${INTERNAL_SERVICE_TOKEN:}

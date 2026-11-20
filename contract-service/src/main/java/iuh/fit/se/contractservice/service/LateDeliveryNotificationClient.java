@@ -16,7 +16,7 @@ import java.util.UUID;
 @Component
 @RequiredArgsConstructor
 public class LateDeliveryNotificationClient {
-    @Value("${NOTIFICATION_SERVICE_URL:http://notification-service:3002/api/v1/notifications}")
+    @Value("${NOTIFICATION_SERVICE_URL:http://notification-service:3002}")
     private String notificationServiceUrl;
 
     @Value("${INTERNAL_SERVICE_TOKEN:}")
@@ -53,7 +53,18 @@ public class LateDeliveryNotificationClient {
         headers.set("X-Internal-Token", token);
         Map<String, Object> body = Map.of("userId", userId.toString(), "title", title, "message", message,
                 "referenceId", tripId.toString(), "type", "LATE_DELIVERY", "dedupeKey", dedupeKey);
-        restTemplate.exchange(notificationServiceUrl.replaceAll("/$", "") + "/internal/create",
+        restTemplate.exchange(resolveInternalCreateUrl(notificationServiceUrl),
                 HttpMethod.POST, new HttpEntity<>(body, headers), Map.class);
+    }
+
+    static String resolveInternalCreateUrl(String rawUrl) {
+        String base = rawUrl == null ? "" : rawUrl.trim().replaceAll("/+$", "");
+        if (base.endsWith("/api/v1/notifications/internal/create")) {
+            return base;
+        }
+        if (base.endsWith("/api/v1/notifications")) {
+            return base + "/internal/create";
+        }
+        return base + "/api/v1/notifications/internal/create";
     }
 }

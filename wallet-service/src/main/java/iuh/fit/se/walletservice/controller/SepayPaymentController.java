@@ -6,6 +6,7 @@ import iuh.fit.se.walletservice.dto.response.TopUpResponse;
 import iuh.fit.se.walletservice.dto.response.TopUpStatusResponse;
 import iuh.fit.se.walletservice.dto.response.PaymentOrderPageResponse;
 import iuh.fit.se.walletservice.dto.response.PaymentOrderResponse;
+import iuh.fit.se.walletservice.service.IdentityVerificationClient;
 import iuh.fit.se.walletservice.service.PaymentOrderService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -27,16 +28,22 @@ import java.util.UUID;
 @RequestMapping("/api/v1/payments/sepay")
 public class SepayPaymentController {
     private final PaymentOrderService paymentOrderService;
+    private final IdentityVerificationClient identityVerificationClient;
 
-    public SepayPaymentController(PaymentOrderService paymentOrderService) {
+    public SepayPaymentController(
+            PaymentOrderService paymentOrderService,
+            IdentityVerificationClient identityVerificationClient) {
         this.paymentOrderService = paymentOrderService;
+        this.identityVerificationClient = identityVerificationClient;
     }
 
     @PostMapping("/top-ups")
     public TopUpResponse createTopUp(
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @Valid @RequestBody TopUpRequest request) {
-        return paymentOrderService.createTopUp(accountId(userId), request);
+        UUID parsedAccountId = accountId(userId);
+        identityVerificationClient.assertVerified(parsedAccountId);
+        return paymentOrderService.createTopUp(parsedAccountId, request);
     }
 
     @GetMapping("/top-ups/{invoiceNumber}")

@@ -18,6 +18,7 @@ import java.util.*;
 @Service @RequiredArgsConstructor
 public class TripTrackingService {
     private final TripRepository trips;
+    private final ContractRepository contracts;
     private final TripLocationUpdateRepository points;
     private final TripTrackingSessionRepository sessions;
     private final JourneyEventRepository events;
@@ -45,7 +46,7 @@ public class TripTrackingService {
             Instant lastEventAt,Object routeGeometry,String routingStatus,Map<String,Object> routeMeta) {}
 
     @Transactional public Session start(UUID actor,AccountRole role,UUID id) {
-        Trip trip=locked(id); driver(trip,actor,role); activeTrip(trip);
+        Trip trip=locked(id); driver(trip,actor,role); requireSignedContract(id); activeTrip(trip);
         var existing=sessions.findFirstByTripIdAndStatus(id,"ACTIVE");
         if (existing.isPresent() && actor.equals(actorOf(existing.get()))) return Session.from(existing.get());
         Instant now=clock.instant();
@@ -67,7 +68,7 @@ public class TripTrackingService {
         return Session.from(session);
     }
     @Transactional public Batch upload(UUID actor,AccountRole role,UUID tripId,GpsBatchRequest request) {
-        Trip trip=locked(tripId);driver(trip,actor,role);activeTrip(trip);
+        Trip trip=locked(tripId);driver(trip,actor,role);requireSignedContract(tripId);activeTrip(trip);
         if (request==null || request.trackingSessionId()==null || request.points()==null
                 || request.points().isEmpty() || request.points().size()>50) throw error(HttpStatus.BAD_REQUEST,"GPS batch must contain 1 to 50 points");
         var session=session(request.trackingSessionId());
@@ -172,6 +173,11 @@ public class TripTrackingService {
     private TripTrackingSession session(UUID id){return sessions.lockById(id).orElseThrow(()->error(HttpStatus.NOT_FOUND,"Tracking session not found"));}
     private void driver(Trip trip,UUID actor,AccountRole role) {
         if(!driverAccess.allows(trip,actor,role,DriverAccessPolicy.Mode.WRITE))throw error(HttpStatus.FORBIDDEN,"Assigned driver required");
+    }
+    private void requireSignedContract(UUID tripId) {
+        contracts.findByTripId(tripId)
+                .filter(contract -> contract.getStatus() != ContractStatus.SIGNED)
+                .ifPresent(contract -> { throw error(HttpStatus.CONFLICT, TripService.UNSIGNED_CONTRACT_MESSAGE); });
     }
     private void access(Trip trip,UUID actor,AccountRole role) {
         if (!(role==AccountRole.ADMIN || role==AccountRole.SHIPPER && actor.equals(trip.getShipperId())

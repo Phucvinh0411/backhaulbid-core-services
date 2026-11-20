@@ -3,6 +3,7 @@ package iuh.fit.se.walletservice.controller;
 import iuh.fit.se.walletservice.dto.request.WithdrawalRequestDto;
 import iuh.fit.se.walletservice.dto.response.WithdrawalPageResponse;
 import iuh.fit.se.walletservice.dto.response.WithdrawalResponse;
+import iuh.fit.se.walletservice.service.IdentityVerificationClient;
 import iuh.fit.se.walletservice.service.WithdrawalService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,9 +24,13 @@ import java.util.UUID;
 @RequestMapping("/api/v1/wallets/me/withdrawals")
 public class WithdrawalController {
     private final WithdrawalService withdrawalService;
+    private final IdentityVerificationClient identityVerificationClient;
 
-    public WithdrawalController(WithdrawalService withdrawalService) {
+    public WithdrawalController(
+            WithdrawalService withdrawalService,
+            IdentityVerificationClient identityVerificationClient) {
         this.withdrawalService = withdrawalService;
+        this.identityVerificationClient = identityVerificationClient;
     }
 
     @PostMapping
@@ -33,7 +38,9 @@ public class WithdrawalController {
     public WithdrawalResponse create(
             @RequestHeader(value = "X-User-Id", required = false) String userId,
             @Valid @RequestBody WithdrawalRequestDto request) {
-        return withdrawalService.create(accountId(userId), request);
+        UUID parsedAccountId = accountId(userId);
+        identityVerificationClient.assertVerified(parsedAccountId);
+        return withdrawalService.create(parsedAccountId, request);
     }
 
     @GetMapping

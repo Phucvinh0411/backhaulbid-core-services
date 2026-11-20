@@ -67,20 +67,6 @@ public class VehicleController {
                 .body(VehicleResponse.from(vehicleService.create(carrierId, request)));
     }
 
-
-
-    @PostMapping("/bulk")
-    public ResponseEntity<List<VehicleResponse>> createBulk(
-            @RequestHeader("X-User-Id") UUID carrierId,
-            @RequestHeader("X-User-Role") String role,
-            @RequestBody List<@Valid CreateVehicleRequest> requests
-    ) {
-        requireCarrier(role);
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(vehicleService.createBulk(carrierId, requests).stream().map(VehicleResponse::from).toList());
-    }
-
-
     @PatchMapping("/{vehicleId}")
     public VehicleResponse update(
             @RequestHeader("X-User-Id") UUID carrierId,

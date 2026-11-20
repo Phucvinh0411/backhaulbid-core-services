@@ -2,6 +2,7 @@ package iuh.fit.se.domain.entity;
 
 import iuh.fit.se.domain.enums.AccountRole;
 import iuh.fit.se.domain.enums.AccountStatus;
+import iuh.fit.se.domain.enums.AuthProvider;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -32,8 +33,20 @@ public class Account {
     @Column(unique = true, length = 255)
     private String email;
 
-    @Column(name = "password_hash", nullable = false, length = 255)
+    @Column(name = "password_hash", length = 255)
     private String passwordHash;
+
+    @Column(name = "google_sub", unique = true, length = 255)
+    private String googleSub;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "auth_provider", nullable = false, length = 30)
+    @Builder.Default
+    private AuthProvider authProvider = AuthProvider.LOCAL;
+
+    @Column(name = "email_verified", nullable = false)
+    @Builder.Default
+    private boolean emailVerified = false;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 50)

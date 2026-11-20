@@ -4,6 +4,7 @@ import iuh.fit.se.contractservice.domain.entity.Contract;
 import iuh.fit.se.contractservice.domain.entity.ContractSignature;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
 import iuh.fit.se.contractservice.domain.enums.ContractStatus;
+import iuh.fit.se.contractservice.dto.RequestSignOtpResponse;
 import iuh.fit.se.contractservice.repository.ContractRepository;
 import iuh.fit.se.contractservice.repository.ContractSignatureRepository;
 import lombok.RequiredArgsConstructor;
@@ -12,8 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -22,6 +24,11 @@ import java.util.UUID;
 public class ContractService {
     private final ContractRepository contractRepository;
     private final ContractSignatureRepository signatureRepository;
+    private final IdentityVerificationClient identityVerificationClient;
+    private final ContractSigningOtpService signingOtpService;
+    private final ContractOtpMailSender otpMailSender;
+    private final AwardEventPublisher awardEventPublisher;
+    private final Clock clock;
 
     @Transactional(readOnly = true)
     public List<Contract> list(UUID accountId, AccountRole role, ContractStatus status) {
@@ -43,7 +50,85 @@ public class ContractService {
     }
 
     @Transactional
-    public Contract sign(UUID accountId, AccountRole role, UUID contractId, String ipAddress) {
+    public RequestSignOtpResponse requestSignOtp(UUID accountId, AccountRole role, UUID contractId, String ipAddress) {
+        Instant now = clock.instant();
+        String sanitizedIp = sanitizeIp(ipAddress);
+        Contract contract = loadSignableContract(accountId, role, contractId, now);
+
+        var existingSignature = signatureRepository.findByContractIdAndAccountId(contractId, accountId);
+        boolean newSignature = existingSignature.isEmpty();
+        ContractSignature signature = existingSignature.orElseGet(() -> ContractSignature.builder()
+                .contract(contract)
+                .accountId(accountId)
+                .role(role)
+                .ipAddress(sanitizedIp)
+                .build());
+        signingOtpService.assertCanRequestOtp(signature, now);
+
+        var contact = identityVerificationClient.fetchSigningContact(accountId);
+        if (contact.email() == null || contact.email().isBlank()) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Tài khoản chưa có email. Vui lòng thêm email trong Cài đặt tài khoản trước khi ký hợp đồng.");
+        }
+
+        var issued = signingOtpService.issueChallenge(signature, contractId, accountId, now);
+        signature.setIpAddress(sanitizedIp);
+        signature.setRole(role);
+        if (newSignature) {
+            contract.addSignature(signature);
+        }
+        signatureRepository.save(signature);
+
+        otpMailSender.sendSigningOtp(
+                contact.email(),
+                contact.fullName(),
+                contract.getContractCode(),
+                issued.otp(),
+                issued.expiresMinutes());
+        return new RequestSignOtpResponse(
+                signingOtpService.maskEmail(contact.email()),
+                issued.expiresAt(),
+                issued.resendAfterSeconds());
+    }
+
+    @Transactional(noRollbackFor = ResponseStatusException.class)
+    public Contract sign(UUID accountId, AccountRole role, UUID contractId, String ipAddress, String otpCode) {
+        Instant now = clock.instant();
+        Contract contract = loadSignableContract(accountId, role, contractId, now);
+        boolean auctionAwardContract = contract.getTrip() != null
+                && contract.getTrip().getAwardAttemptId() != null;
+
+        ContractSignature signature = signatureRepository.findByContractIdAndAccountId(contractId, accountId)
+                .orElse(null);
+        if (!signingOtpService.verifyChallenge(signature, contractId, accountId, otpCode, now)) {
+            signatureRepository.save(signature);
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Mã OTP không chính xác. Vui lòng kiểm tra email và thử lại.");
+        }
+
+        signature.setIpAddress(sanitizeIp(ipAddress));
+        signature.setRole(role);
+        signature.sign();
+        signatureRepository.save(signature);
+
+        contract.setStatus(contract.isFullySigned() ? ContractStatus.SIGNED : ContractStatus.WAITING_SIGNATURE);
+        if (auctionAwardContract && role == AccountRole.CARRIER && contract.getStatus() != ContractStatus.SIGNED) {
+            contract.setSigningDeadlineAt(now.plus(Duration.ofHours(24)));
+        }
+        Contract saved = contractRepository.save(contract);
+        if (auctionAwardContract) {
+            awardEventPublisher.publishAfterCommit(
+                    contract.getTrip().getAwardAttemptId(),
+                    saved.getId(),
+                    contract.getTrip().getId(),
+                    saved.getStatus());
+        }
+        return saved;
+    }
+
+    private Contract loadSignableContract(UUID accountId, AccountRole role, UUID contractId, Instant now) {
         if (role != AccountRole.CARRIER && role != AccountRole.SHIPPER) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only contract parties can sign");
         }
@@ -55,7 +140,7 @@ public class ContractService {
                 || contract.getStatus() == ContractStatus.SIGNED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Contract cannot be signed in its current status");
         }
-        if (contract.getSigningDeadlineAt() != null && Instant.now().isAfter(contract.getSigningDeadlineAt())) {
+        if (contract.getSigningDeadlineAt() != null && now.isAfter(contract.getSigningDeadlineAt())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Contract signing deadline has passed");
         }
         boolean auctionAwardContract = contract.getTrip() != null
@@ -63,36 +148,19 @@ public class ContractService {
         if (auctionAwardContract && role == AccountRole.SHIPPER && !hasSigned(contract, AccountRole.CARRIER)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Carrier must sign the contract first");
         }
-
-        boolean newSignature = signatureRepository.findByContractIdAndAccountId(contractId, accountId).isEmpty();
-        ContractSignature signature = signatureRepository.findByContractIdAndAccountId(contractId, accountId)
-                .orElseGet(() -> ContractSignature.builder()
-                        .contract(contract)
-                        .accountId(accountId)
-                        .role(role)
-                        .ipAddress(ipAddress)
-                        .build());
-        if (signature.getSignedAt() != null) {
-            throw new ResponseStatusException(HttpStatus.CONFLICT, "Contract signature already recorded");
-        }
-        signature.setIpAddress(ipAddress);
-        signature.setRole(role);
-        signature.sign();
-        if (newSignature) {
-            contract.addSignature(signature);
-        }
-        signatureRepository.save(signature);
-
-        contract.setStatus(contract.isFullySigned() ? ContractStatus.SIGNED : ContractStatus.WAITING_SIGNATURE);
-        if (auctionAwardContract && role == AccountRole.CARRIER && contract.getStatus() != ContractStatus.SIGNED) {
-            contract.setSigningDeadlineAt(Instant.now().plus(Duration.ofHours(24)));
-        }
-        return contractRepository.save(contract);
+        return contract;
     }
 
     private boolean hasSigned(Contract contract, AccountRole role) {
         return contract.getSignatures() != null && contract.getSignatures().stream()
                 .anyMatch(signature -> signature.getRole() == role && signature.getSignedAt() != null);
+    }
+
+    static String sanitizeIp(String ipAddress) {
+        if (ipAddress == null) return null;
+        String first = ipAddress.split(",")[0].trim();
+        if (first.isEmpty()) return null;
+        return first.length() > 45 ? first.substring(0, 45) : first;
     }
 
     private void ensureAccess(Contract contract, UUID accountId, AccountRole role) {

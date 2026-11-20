@@ -3,6 +3,7 @@ package iuh.fit.se.contractservice.service;
 import iuh.fit.se.contractservice.domain.entity.TrackingLog;
 import iuh.fit.se.contractservice.domain.entity.Trip;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
+import iuh.fit.se.contractservice.domain.enums.ContractStatus;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 import iuh.fit.se.contractservice.dto.CreateTrackingRequest;
 import iuh.fit.se.contractservice.dto.AssignDriverRequest;
@@ -14,6 +15,7 @@ import iuh.fit.se.contractservice.domain.entity.DeliveryProof;
 import iuh.fit.se.contractservice.domain.entity.TripLocationUpdate;
 import iuh.fit.se.contractservice.domain.entity.TripLocationSource;
 import iuh.fit.se.contractservice.domain.enums.JourneyEventType;
+import iuh.fit.se.contractservice.repository.ContractRepository;
 import iuh.fit.se.contractservice.repository.JourneyEventRepository;
 import iuh.fit.se.contractservice.repository.DeliveryProofRepository;
 import iuh.fit.se.contractservice.repository.TripLocationUpdateRepository;
@@ -39,7 +41,11 @@ import iuh.fit.se.contractservice.dto.CreateTripLocationRequest;
 @Service
 @RequiredArgsConstructor
 public class TripService {
+    static final String UNSIGNED_CONTRACT_MESSAGE =
+            "Hợp đồng vận chuyển chưa được hai bên ký xác nhận. Vui lòng hoàn tất ký hợp đồng trước khi thực hiện thao tác này.";
+
     private final TripRepository tripRepository;
+    private final ContractRepository contractRepository;
     private final TrackingLogRepository trackingLogRepository;
     private final JourneyEventRepository journeyEventRepository;
     private final DeliveryProofRepository deliveryProofRepository;
@@ -114,6 +120,7 @@ public class TripService {
         Trip trip = tripRepository.findByIdForUpdate(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
         ensureAccess(trip, accountId, role);
+        requireSignedContract(tripId);
         if (trip.getStatus() != TripStatus.WAITING_PICKUP) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Only waiting trips can be assigned");
         }
@@ -135,6 +142,7 @@ public class TripService {
         Trip trip = tripRepository.findByIdForUpdate(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
         ensureAccess(trip, accountId, role);
+        requireSignedContract(tripId);
         if (trip.getDriverId() == null) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Chuyến chưa được phân công tài xế");
         }
@@ -338,7 +346,16 @@ public class TripService {
         Trip trip = tripRepository.findByIdForUpdate(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
         ensureAccess(trip, accountId, role, DriverAccessPolicy.Mode.WRITE);
+        requireSignedContract(tripId);
         return trip;
+    }
+
+    private void requireSignedContract(UUID tripId) {
+        contractRepository.findByTripId(tripId)
+                .filter(contract -> contract.getStatus() != ContractStatus.SIGNED)
+                .ifPresent(contract -> {
+                    throw new ResponseStatusException(HttpStatus.CONFLICT, UNSIGNED_CONTRACT_MESSAGE);
+                });
     }
 
     private void stopTrackingIfClosed(Trip trip) {

@@ -37,6 +37,16 @@ public class ContractSignature {
     @Column(name = "otp_code_hashed", length = 255)
     private String otpCodeHashed;
 
+    @Column(name = "otp_expires_at")
+    private Instant otpExpiresAt;
+
+    @Column(name = "otp_sent_at")
+    private Instant otpSentAt;
+
+    @Builder.Default
+    @Column(name = "otp_attempts", nullable = false)
+    private int otpAttempts = 0;
+
     @Column(name = "signed_at")
     private Instant signedAt;
 

@@ -22,6 +22,7 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
                                               @Param("closed") java.util.Collection<iuh.fit.se.contractservice.domain.enums.TripStatus> closed);
 
     @Query(value = "select t.* from trips t where " +
+            "exists (select 1 from contracts c where c.trip_id = t.id and c.status = 'SIGNED') and " +
             "((t.expected_delivery_at < :now and t.deposit_hold_id is not null and t.deposit_amount > 0 and " +
             "(t.status not in ('CANCELLED', 'COMPLETED') or exists (select 1 from trip_delay_settlements s " +
             "where s.trip_id = t.id and (s.wallet_status <> 'COMPLETED' or s.reputation_status <> 'COMPLETED' " +

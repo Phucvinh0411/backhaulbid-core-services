@@ -75,6 +75,8 @@ app:
     api-key: ${BUSINESS_LOOKUP_API_KEY:}
   driver:
     replay-key: ${DRIVER_REPLAY_KEY:}
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:}
 
 management:
   endpoints:

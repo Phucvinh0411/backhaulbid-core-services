@@ -19,5 +19,9 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     Optional<Account> findWithUserProfileById(UUID accountId);
     boolean existsByPhone(String phone);
     boolean existsByEmail(String email);
+    Optional<Account> findByGoogleSub(String googleSub);
+    Optional<Account> findByEmailIgnoreCase(String email);
+    boolean existsByEmailIgnoreCase(String email);
+    boolean existsByEmailIgnoreCaseAndIdNot(String email, UUID id);
     List<Account> findAllByOrderByCreatedAtDesc();
 }

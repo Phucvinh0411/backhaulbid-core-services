@@ -15,9 +15,11 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.validation.annotation.Validated;
@@ -98,6 +100,21 @@ public class BusinessVerificationController {
             @RequestParam(defaultValue = "20") @Min(1) @Max(100) int pageSize) {
         return ResponseEntity.ok(companyVerificationService.findByStatus(
                 status, page, pageSize));
+    }
+
+    @GetMapping("/{id}/documents/{documentType}")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<byte[]> document(
+            @PathVariable UUID id,
+            @PathVariable String documentType) {
+        CompanyVerificationService.BusinessDocument doc = companyVerificationService.document(id, documentType);
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(doc.contentType()))
+                .cacheControl(CacheControl.noStore())
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.inline().filename(doc.fileName(), StandardCharsets.UTF_8).build().toString())
+                .header("X-Content-Type-Options", "nosniff")
+                .body(doc.bytes());
     }
 
     @PatchMapping("/{id}")

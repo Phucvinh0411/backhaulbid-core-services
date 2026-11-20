@@ -15,19 +15,32 @@ import iuh.fit.se.repository.EkycVerificationRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.core.io.Resource;
-import org.springframework.http.MediaType;
+import org.springframework.http.HttpStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.text.Normalizer;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
 
 @Service
 @RequiredArgsConstructor
 public class CompanyVerificationService {
+
+    public record BusinessDocument(byte[] bytes, String contentType, String fileName) {
+    }
+
+    private static final String UUID_PATTERN = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+    private static final Pattern LICENSE_KEY_OR_URL = Pattern.compile(
+            "^(?:https?://[^\\s?#]{1,400}/)?(business-verifications/licenses/" + UUID_PATTERN + "\\.(?:png|jpe?g|webp|gif|pdf))$",
+            Pattern.CASE_INSENSITIVE);
+    private static final Pattern AUTH_LETTER_KEY_OR_URL = Pattern.compile(
+            "^(?:https?://[^\\s?#]{1,400}/)?(business-verifications/authorization/" + UUID_PATTERN + "\\.(?:png|jpe?g|webp|gif|pdf))$",
+            Pattern.CASE_INSENSITIVE);
 
     private final AccountRepository accountRepository;
     private final CompanyRepository companyRepository;
@@ -35,6 +48,7 @@ public class CompanyVerificationService {
     private final BusinessVerificationMapper businessVerificationMapper;
     private final EkycVerificationRepository ekycVerificationRepository;
     private final EkycReviewService ekycReviews;
+    private final MediaCertificateClient mediaCertificateClient;
 
     @Transactional
     public BusinessVerificationResponse submit(
@@ -177,6 +191,39 @@ public class CompanyVerificationService {
         }
 
         return withRepresentativeEkyc(businessVerificationMapper.toResponse(companyRepository.save(company)), company);
+    }
+
+    @Transactional(readOnly = true)
+    public BusinessDocument document(UUID verificationId, String documentType) {
+        Company company = companyRepository.findById(verificationId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy hồ sơ doanh nghiệp"));
+        String rawValue;
+        Pattern pattern;
+        String baseName;
+        if ("businessLicense".equals(documentType)) {
+            rawValue = company.getBusinessLicenseUrl();
+            pattern = LICENSE_KEY_OR_URL;
+            baseName = "giay-phep-doanh-nghiep";
+        } else if ("authorizationLetter".equals(documentType)) {
+            rawValue = company.getAuthorizationLetterUrl();
+            pattern = AUTH_LETTER_KEY_OR_URL;
+            baseName = "giay-uy-quyen";
+        } else {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Loại tài liệu không hợp lệ");
+        }
+        String key = extractDocumentKey(rawValue, pattern);
+        if (key == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy tài liệu doanh nghiệp");
+        }
+        MediaCertificateClient.Certificate fetched = mediaCertificateClient.fetch(key);
+        String ext = key.substring(key.lastIndexOf('.')).toLowerCase(Locale.ROOT);
+        return new BusinessDocument(fetched.bytes(), fetched.contentType(), baseName + ext);
+    }
+
+    static String extractDocumentKey(String rawValue, Pattern pattern) {
+        if (rawValue == null || rawValue.isBlank()) return null;
+        var matcher = pattern.matcher(rawValue.trim());
+        return matcher.matches() ? matcher.group(1) : null;
     }
 
     /** Attaches the owner's newest eKYC report for the admin review. Owner-facing responses never carry it. */

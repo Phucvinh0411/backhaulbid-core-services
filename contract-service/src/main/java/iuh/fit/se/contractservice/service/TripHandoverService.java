@@ -3,9 +3,11 @@ package iuh.fit.se.contractservice.service;
 import iuh.fit.se.contractservice.domain.entity.Trip;
 import iuh.fit.se.contractservice.domain.entity.TripHandover;
 import iuh.fit.se.contractservice.domain.enums.AccountRole;
+import iuh.fit.se.contractservice.domain.enums.ContractStatus;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 import iuh.fit.se.contractservice.dto.ConfirmTripHandoverRequest;
 import iuh.fit.se.contractservice.dto.RecordTripHandoverRequest;
+import iuh.fit.se.contractservice.repository.ContractRepository;
 import iuh.fit.se.contractservice.repository.TripHandoverRepository;
 import iuh.fit.se.contractservice.repository.TripRepository;
 import iuh.fit.se.contractservice.service.driveraccess.DriverAccessPolicy;
@@ -51,15 +53,17 @@ public class TripHandoverService {
     private static final int MAX_PHOTOS = 10;
 
     private final TripRepository trips;
+    private final ContractRepository contracts;
     private final TripHandoverRepository handovers;
     private final DriverAccessPolicy driverAccessPolicy;
     private final DriverGrantService grants;
     private final Clock clock;
     private final UuidV7 ids;
 
-    public TripHandoverService(TripRepository trips, TripHandoverRepository handovers, DriverAccessPolicy driverAccessPolicy,
-                               DriverGrantService grants, Clock clock) {
+    public TripHandoverService(TripRepository trips, ContractRepository contracts, TripHandoverRepository handovers,
+                               DriverAccessPolicy driverAccessPolicy, DriverGrantService grants, Clock clock) {
         this.trips = trips;
+        this.contracts = contracts;
         this.handovers = handovers;
         this.driverAccessPolicy = driverAccessPolicy;
         this.grants = grants;
@@ -75,6 +79,7 @@ public class TripHandoverService {
     public TripHandover record(UUID accountId, AccountRole role, UUID tripId, RecordTripHandoverRequest request) {
         Trip trip = lockTrip(tripId);
         String recordedByType = recorderType(trip, accountId, role);
+        requireSignedContract(tripId);
         if (trip.getStatus() != TripStatus.WAITING_PICKUP) {
             throw conflict("Biên bản bàn giao chỉ ghi khi chuyến đang chờ lấy hàng");
         }
@@ -122,6 +127,7 @@ public class TripHandoverService {
         if (!accountId.equals(trip.getShipperId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Only the shipper of this trip can confirm the handover");
         }
+        requireSignedContract(tripId);
         if (trip.getStatus() != TripStatus.WAITING_PICKUP) {
             throw conflict("Chỉ xác nhận bàn giao khi chuyến đang chờ lấy hàng");
         }
@@ -226,6 +232,14 @@ public class TripHandoverService {
     private Trip lockTrip(UUID tripId) {
         return trips.findByIdForUpdate(tripId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Trip not found"));
+    }
+
+    private void requireSignedContract(UUID tripId) {
+        contracts.findByTripId(tripId)
+                .filter(contract -> contract.getStatus() != ContractStatus.SIGNED)
+                .ifPresent(contract -> {
+                    throw conflict(TripService.UNSIGNED_CONTRACT_MESSAGE);
+                });
     }
 
     /** Who is recording: the driver session (only while its grant is current) or the trip's carrier. */

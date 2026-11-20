@@ -10,6 +10,7 @@ public class RegisterRequest {
     @NotBlank(message = "Phone is required")
     @Pattern(regexp = "[0-9]{9,11}", message = "Phone must contain 9 to 11 digits")
     private String phone;
+    @NotBlank(message = "Email is required")
     @Email(message = "Email is invalid")
     @Size(max = 254, message = "Email must not exceed 254 characters")
     private String email;
