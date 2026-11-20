@@ -86,6 +86,7 @@ public class TripService {
         if (role != AccountRole.CARRIER && role != AccountRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier or admin role required");
         }
+        requireActorAllowedForStatus(role, request.status());
         Trip trip = lock(accountId, role, tripId);
         if (!isAllowedTransition(trip.getStatus(), request.status())) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
@@ -171,6 +172,7 @@ public class TripService {
         if (role != AccountRole.CARRIER && role != AccountRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier or admin role required");
         }
+        requireActorAllowedForStatus(role, request.status());
         Trip trip = lock(accountId, role, tripId);
         if (trip.getStatus() == TripStatus.CANCELLED || trip.getStatus() == TripStatus.COMPLETED) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot add tracking to a closed trip");
@@ -206,10 +208,7 @@ public class TripService {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Cannot update a closed trip");
         }
         TripStatus nextStatus = request.status() == null ? trip.getStatus() : request.status();
-        if (role == AccountRole.DRIVER
-                && (nextStatus == TripStatus.COMPLETED || nextStatus == TripStatus.CANCELLED)) {
-            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver cannot complete or cancel a trip");
-        }
+        requireActorAllowedForStatus(role, nextStatus);
         if (nextStatus != trip.getStatus() && !isAllowedTransition(trip.getStatus(), nextStatus)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
                     "Invalid trip status transition from " + trip.getStatus() + " to " + nextStatus);
@@ -219,6 +218,11 @@ public class TripService {
         }
         if (request.eventType() == JourneyEventType.ADMIN_OVERRIDE && role != AccountRole.ADMIN) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Admin role required for override");
+        }
+        if (request.eventType() == JourneyEventType.DELIVERY_ACCEPTED
+                && role != AccountRole.SHIPPER && role != AccountRole.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only shipper or admin can confirm delivery completion");
         }
         if (role == AccountRole.SHIPPER
                 && (request.eventType() != JourneyEventType.DELIVERY_ACCEPTED || nextStatus != TripStatus.COMPLETED)) {
@@ -378,6 +382,17 @@ public class TripService {
                 || (role == AccountRole.SHIPPER && accountId.equals(trip.getShipperId()));
         if (!allowed) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You do not have access to this trip");
+        }
+    }
+
+    private void requireActorAllowedForStatus(AccountRole role, TripStatus nextStatus) {
+        if (role == AccountRole.CARRIER && nextStatus == TripStatus.COMPLETED) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Carrier cannot complete a trip; shipper confirmation required");
+        }
+        if (role == AccountRole.DRIVER
+                && (nextStatus == TripStatus.COMPLETED || nextStatus == TripStatus.CANCELLED)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver cannot complete or cancel a trip");
         }
     }
 
