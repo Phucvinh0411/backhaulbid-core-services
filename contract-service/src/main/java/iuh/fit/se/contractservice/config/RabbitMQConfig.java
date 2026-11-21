@@ -20,6 +20,7 @@ public class RabbitMQConfig {
     public static final String LOCATION_ROUTING      = "trip.location.updated";
     public static final String AWARD_UPDATED_QUEUE   = "contract.award.updated.queue";
     public static final String AWARD_UPDATED_ROUTING = "contract.award.updated";
+    public static final String COMPLAINT_SSE_EXCHANGE = "contract.complaint.sse.fanout";
 
     @Bean
     public TopicExchange contractEventsExchange() {
@@ -52,6 +53,21 @@ public class RabbitMQConfig {
                 .bind(contractAwardUpdatedQueue)
                 .to(contractEventsExchange)
                 .with(AWARD_UPDATED_ROUTING);
+    }
+
+    @Bean
+    public FanoutExchange complaintSseFanoutExchange() {
+        return new FanoutExchange(COMPLAINT_SSE_EXCHANGE, true, false);
+    }
+
+    @Bean
+    public Queue complaintSseQueue() {
+        return new AnonymousQueue();
+    }
+
+    @Bean
+    public Binding complaintSseBinding(Queue complaintSseQueue, FanoutExchange complaintSseFanoutExchange) {
+        return BindingBuilder.bind(complaintSseQueue).to(complaintSseFanoutExchange);
     }
 
     /** Đảm bảo RabbitTemplate gửi message dạng JSON. */

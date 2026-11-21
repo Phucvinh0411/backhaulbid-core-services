@@ -1,10 +1,22 @@
 name: CI - Core Services (Spring Boot)
 
 on:
+  push:
+    branches:
+      - main
+      - develop
   pull_request:
     branches:
       - main
       - develop
+      - deploy
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-and-test:
@@ -22,5 +34,5 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      - name: Run tests
+      - name: Run unit & module tests
         run: mvn clean test -B --no-transfer-progress
