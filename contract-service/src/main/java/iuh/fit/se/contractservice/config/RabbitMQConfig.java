@@ -62,7 +62,8 @@ public class RabbitMQConfig {
 
     @Bean
     public Queue complaintSseQueue() {
-        return new AnonymousQueue();
+        // QueueBuilder avoids AnonymousQueue's deprecated x-queue-master-locator header rejected by RabbitMQ 4.x / CloudAMQP.
+        return QueueBuilder.nonDurable().exclusive().autoDelete().build();
     }
 
     @Bean
