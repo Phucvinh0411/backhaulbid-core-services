@@ -94,6 +94,23 @@ public class DriverProfileService {
         return driverRepository.save(driver);
     }
 
+    @Transactional(readOnly = true)
+    public String getAuthorizedLicenseImageUrl(UUID accountId, String role, UUID driverId) {
+        if (!"ADMIN".equalsIgnoreCase(role) && !"CARRIER".equalsIgnoreCase(role)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier or admin role required");
+        }
+        DriverProfile driver = driverRepository.findById(driverId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver not found"));
+        if (!"ADMIN".equalsIgnoreCase(role) && !accountId.equals(driver.getCarrierId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Driver does not belong to the carrier");
+        }
+        String url = driver.getLicenseImageUrl();
+        if (url == null || url.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chưa có ảnh giấy phép lái xe");
+        }
+        return url;
+    }
+
     private DriverProfile findOwned(UUID carrierId, UUID driverId) {
         DriverProfile driver = driverRepository.findById(driverId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Driver not found"));

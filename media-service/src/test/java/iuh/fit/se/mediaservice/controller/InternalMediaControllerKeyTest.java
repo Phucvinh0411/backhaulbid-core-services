@@ -19,4 +19,17 @@ class InternalMediaControllerKeyTest {
         assertThat(InternalMediaController.resolvePrivateObjectKey("business-verifications/licenses/../secret.pdf")).isNull();
         assertThat(InternalMediaController.resolvePrivateObjectKey("avatars/" + UUID.randomUUID() + ".png")).isNull();
     }
+
+    @Test
+    void resolvePrivateObjectKeyAllowsFleetVehicleAndDriverDocumentKeysAndUrls() {
+        String regKey = "vehicles/registration/" + UUID.randomUUID() + ".png";
+        String inspKey = "vehicles/inspection/" + UUID.randomUUID() + ".pdf";
+        String drvKey = "drivers/license/" + UUID.randomUUID() + ".jpg";
+
+        assertThat(InternalMediaController.resolvePrivateObjectKey(regKey)).isEqualTo(regKey);
+        assertThat(InternalMediaController.resolvePrivateObjectKey(
+                "https://backhaulbid-s3.s3.ap-southeast-2.amazonaws.com/" + inspKey)).isEqualTo(inspKey);
+        assertThat(InternalMediaController.resolvePrivateObjectKey(
+                "https://backhaulbid-s3.s3.ap-southeast-2.amazonaws.com/" + drvKey)).isEqualTo(drvKey);
+    }
 }

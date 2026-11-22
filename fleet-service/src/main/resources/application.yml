@@ -27,10 +27,11 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
     properties:
       hibernate:
-        format_sql: true
+        format_sql: ${SPRING_JPA_SHOW_SQL:false}
+        default_batch_fetch_size: 50
         dialect: org.hibernate.dialect.PostgreSQLDialect
 
   # ──────────────────────────────────────────
@@ -72,4 +73,6 @@ springdoc:
     disable-swagger-default-url: true
 
 app:
+  media:
+    url: ${MEDIA_SERVICE_URL:http://media-service:8080}
   internal-token: ${INTERNAL_SERVICE_TOKEN:}

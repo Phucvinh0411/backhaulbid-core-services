@@ -1,6 +1,7 @@
 package iuh.fit.se.contractservice.repository;
 
 import iuh.fit.se.contractservice.domain.entity.Trip;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.jpa.repository.Lock;
@@ -13,6 +14,10 @@ import java.util.Optional;
 import java.time.Instant;
 
 public interface TripRepository extends JpaRepository<Trip, UUID> {
+    @Override
+    @EntityGraph(attributePaths = {"contract", "trackingLogs"})
+    Optional<Trip> findById(UUID id);
+
     Optional<Trip> findByAuctionId(String auctionId);
 
     Optional<Trip> findByAwardAttemptId(String awardAttemptId);
@@ -31,15 +36,19 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
             nativeQuery = true)
     List<Trip> findTripsForLateReview(@Param("now") Instant now);
 
-    List<Trip> findByCarrierIdOrderByCreatedAtDesc(UUID carrierId);
+    @Query("select distinct t from Trip t left join fetch t.contract left join fetch t.trackingLogs where t.carrierId = :carrierId order by t.createdAt desc")
+    List<Trip> findByCarrierIdOrderByCreatedAtDesc(@Param("carrierId") UUID carrierId);
 
-    List<Trip> findByDriverAccountIdOrderByCreatedAtDesc(UUID driverAccountId);
+    @Query("select distinct t from Trip t left join fetch t.contract left join fetch t.trackingLogs where t.driverAccountId = :driverAccountId order by t.createdAt desc")
+    List<Trip> findByDriverAccountIdOrderByCreatedAtDesc(@Param("driverAccountId") UUID driverAccountId);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select t from Trip t where t.id = :id")
     Optional<Trip> findByIdForUpdate(@Param("id") UUID id);
 
-    List<Trip> findByShipperIdOrderByCreatedAtDesc(UUID shipperId);
+    @Query("select distinct t from Trip t left join fetch t.contract left join fetch t.trackingLogs where t.shipperId = :shipperId order by t.createdAt desc")
+    List<Trip> findByShipperIdOrderByCreatedAtDesc(@Param("shipperId") UUID shipperId);
 
+    @Query("select distinct t from Trip t left join fetch t.contract left join fetch t.trackingLogs order by t.createdAt desc")
     List<Trip> findAllByOrderByCreatedAtDesc();
 }

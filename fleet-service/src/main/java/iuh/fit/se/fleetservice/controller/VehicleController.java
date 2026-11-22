@@ -6,10 +6,15 @@ import iuh.fit.se.fleetservice.dto.UpdateVehicleRequest;
 import iuh.fit.se.fleetservice.dto.VehicleResponse;
 import iuh.fit.se.fleetservice.dto.PublicVehicleResponse;
 import iuh.fit.se.fleetservice.mapper.VehicleMapper;
+import iuh.fit.se.fleetservice.service.FleetMediaClient;
 import iuh.fit.se.fleetservice.service.VehicleService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +37,18 @@ import java.util.UUID;
 public class VehicleController {
     private final VehicleService vehicleService;
     private final VehicleMapper vehicleMapper;
+    private final FleetMediaClient fleetMediaClient;
+
+    @GetMapping("/{vehicleId}/documents/{kind}")
+    public ResponseEntity<byte[]> readDocument(
+            @RequestHeader("X-User-Id") UUID accountId,
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable UUID vehicleId,
+            @PathVariable String kind
+    ) {
+        String url = vehicleService.getAuthorizedDocumentUrl(accountId, role, vehicleId, kind);
+        return FleetMediaClient.toInlineResponse(fleetMediaClient.fetch(url));
+    }
 
     @GetMapping("/mine")
     public List<VehicleResponse> getMyVehicles(

@@ -151,6 +151,35 @@ public class VehicleService {
         return vehicleRepository.save(vehicle);
     }
 
+    @Transactional(readOnly = true)
+    public String getAuthorizedDocumentUrl(UUID accountId, String role, UUID vehicleId, String kind) {
+        if (!"ADMIN".equalsIgnoreCase(role) && !"CARRIER".equalsIgnoreCase(role)) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Carrier or admin role required");
+        }
+        VehicleDocumentType docType = switch (kind == null ? "" : kind.toLowerCase()) {
+            case "registration" -> VehicleDocumentType.REGISTRATION;
+            case "inspection" -> VehicleDocumentType.INSPECTION_CERTIFICATE;
+            default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Unsupported vehicle document kind");
+        };
+        Vehicle vehicle = vehicleRepository.findById(vehicleId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vehicle not found"));
+        if (!"ADMIN".equalsIgnoreCase(role) && !accountId.equals(vehicle.getCarrierId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Vehicle does not belong to the carrier");
+        }
+        String url = null;
+        if (vehicle.getDocuments() != null) {
+            for (VehicleDocument doc : vehicle.getDocuments()) {
+                if (doc.getDocumentType() == docType) {
+                    url = doc.getDocumentUrl();
+                }
+            }
+        }
+        if (url == null || url.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Chưa có tài liệu phương tiện");
+        }
+        return url;
+    }
+
     private Vehicle findOwned(UUID carrierId, UUID vehicleId) {
         Vehicle vehicle = vehicleRepository.findById(vehicleId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Vehicle not found"));

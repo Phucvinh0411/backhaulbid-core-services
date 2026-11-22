@@ -7,9 +7,14 @@ import iuh.fit.se.fleetservice.dto.UpdateDriverRequest;
 import iuh.fit.se.fleetservice.dto.PublicDriverResponse;
 import iuh.fit.se.fleetservice.mapper.DriverMapper;
 import iuh.fit.se.fleetservice.service.DriverProfileService;
+import iuh.fit.se.fleetservice.service.FleetMediaClient;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +37,17 @@ import java.util.UUID;
 public class DriverController {
     private final DriverProfileService driverProfileService;
     private final DriverMapper driverMapper;
+    private final FleetMediaClient fleetMediaClient;
+
+    @GetMapping("/{driverId}/license-document")
+    public ResponseEntity<byte[]> readLicenseDocument(
+            @RequestHeader("X-User-Id") UUID accountId,
+            @RequestHeader("X-User-Role") String role,
+            @PathVariable UUID driverId
+    ) {
+        String url = driverProfileService.getAuthorizedLicenseImageUrl(accountId, role, driverId);
+        return FleetMediaClient.toInlineResponse(fleetMediaClient.fetch(url));
+    }
 
     @GetMapping("/mine")
     public List<DriverResponse> getMyDrivers(

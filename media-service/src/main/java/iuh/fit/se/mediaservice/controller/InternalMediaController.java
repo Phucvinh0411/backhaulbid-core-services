@@ -38,8 +38,11 @@ public class InternalMediaController {
     private static final Pattern PRIVATE_CERTIFICATE_KEY = Pattern.compile(
             "^business-verifications/(?:insurance|licenses|authorization)/" + UUID + "\\.(png|jpe?g|webp|gif|pdf)$",
             Pattern.CASE_INSENSITIVE);
+    private static final Pattern PRIVATE_FLEET_DOCUMENT_KEY = Pattern.compile(
+            "^(?:vehicles/(?:registration|inspection)|drivers/license)/" + UUID + "\\.(png|jpe?g|webp|gif|pdf)$",
+            Pattern.CASE_INSENSITIVE);
     private static final Pattern PRIVATE_URL_KEY = Pattern.compile(
-            "^https?://[^\\s?#]{1,400}/((?:handover-photos|claim-evidence|goods-value-docs|business-verifications/(?:insurance|licenses|authorization))/"
+            "^https?://[^\\s?#]{1,400}/((?:handover-photos|claim-evidence|goods-value-docs|business-verifications/(?:insurance|licenses|authorization)|vehicles/(?:registration|inspection)|drivers/license)/"
                     + UUID + "\\.(png|jpe?g|webp|gif|pdf))$",
             Pattern.CASE_INSENSITIVE);
 
@@ -85,7 +88,8 @@ public class InternalMediaController {
     /** Only the exact private folders and file-name shapes; a folder prefix or a traversal never matches. */
     static boolean isPrivateObjectKey(String key) {
         return key != null && (PRIVATE_IMAGE_KEY.matcher(key).matches() || PRIVATE_EVIDENCE_KEY.matcher(key).matches()
-                || PRIVATE_VALUE_DOCUMENT_KEY.matcher(key).matches() || PRIVATE_CERTIFICATE_KEY.matcher(key).matches());
+                || PRIVATE_VALUE_DOCUMENT_KEY.matcher(key).matches() || PRIVATE_CERTIFICATE_KEY.matcher(key).matches()
+                || PRIVATE_FLEET_DOCUMENT_KEY.matcher(key).matches());
     }
 
     private void authorize(String token) {
