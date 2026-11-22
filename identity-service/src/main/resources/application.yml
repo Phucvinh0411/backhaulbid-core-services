@@ -30,6 +30,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: validate
+    # Keep SQL logging off by default to avoid Hikari pool/I/O contention in multi-pod clusters.
     show-sql: ${SPRING_JPA_SHOW_SQL:false}
     properties:
       hibernate:
