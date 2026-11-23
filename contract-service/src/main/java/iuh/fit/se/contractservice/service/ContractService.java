@@ -38,7 +38,11 @@ public class ContractService {
             case DRIVER -> List.of();
             case SHIPPER -> contractRepository.findByShipperIdOrderByCreatedAtDesc(accountId);
         };
-        return status == null ? contracts : contracts.stream().filter(contract -> contract.getStatus() == status).toList();
+        List<Contract> filtered = status == null
+                ? contracts
+                : contracts.stream().filter(contract -> contract.getStatus() == status).toList();
+        filtered.forEach(this::initializeLazyAssociations);
+        return filtered;
     }
 
     @Transactional(readOnly = true)
@@ -46,7 +50,14 @@ public class ContractService {
         Contract contract = contractRepository.findById(contractId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Contract not found"));
         ensureAccess(contract, accountId, role);
+        initializeLazyAssociations(contract);
         return contract;
+    }
+
+    private void initializeLazyAssociations(Contract contract) {
+        if (contract.getTrip() != null && contract.getTrip().getTrackingLogs() != null) {
+            contract.getTrip().getTrackingLogs().size();
+        }
     }
 
     @Transactional

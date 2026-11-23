@@ -3,14 +3,20 @@ package iuh.fit.se.contractservice.repository;
 import iuh.fit.se.contractservice.domain.entity.Complaint;
 import iuh.fit.se.contractservice.domain.enums.ComplaintCategory;
 import iuh.fit.se.contractservice.domain.enums.ComplaintStatus;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public interface ComplaintRepository extends JpaRepository<Complaint, UUID> {
+    @Override
+    @EntityGraph(attributePaths = {"messages"})
+    Optional<Complaint> findById(UUID id);
+
     long countByStatus(ComplaintStatus status);
     List<Complaint> findAllByOrderByCreatedAtDesc();
 
