@@ -130,23 +130,26 @@ public class LateDeliveryService {
                 errors.add("Ví: " + exception.getMessage());
             }
         }
-        if (!"COMPLETED".equals(settlement.getReputationStatus())) {
-            try {
-                reputationClient.deductLateDeliveryPoints(trip.getCarrierId(), trip.getId(), settlement.getTier());
-                settlement.setReputationStatus("COMPLETED");
-            } catch (RuntimeException exception) {
-                settlement.setReputationStatus("FAILED");
-                errors.add("Điểm uy tín: " + exception.getMessage());
+        // Only deduct reputation and notify once wallet compensation has succeeded (or had zero increment).
+        if ("COMPLETED".equals(settlement.getWalletStatus())) {
+            if (!"COMPLETED".equals(settlement.getReputationStatus())) {
+                try {
+                    reputationClient.deductLateDeliveryPoints(trip.getCarrierId(), trip.getId(), settlement.getTier());
+                    settlement.setReputationStatus("COMPLETED");
+                } catch (RuntimeException exception) {
+                    settlement.setReputationStatus("FAILED");
+                    errors.add("Điểm uy tín: " + exception.getMessage());
+                }
             }
-        }
-        if (!"COMPLETED".equals(settlement.getNotificationStatus())) {
-            try {
-                notificationClient.notify(trip.getShipperId(), trip.getId(), settlement.getTier(), settlement.getLateMinutes(), "SHIPPER");
-                notificationClient.notify(trip.getCarrierId(), trip.getId(), settlement.getTier(), settlement.getLateMinutes(), "CARRIER");
-                settlement.setNotificationStatus("COMPLETED");
-            } catch (RuntimeException exception) {
-                settlement.setNotificationStatus("FAILED");
-                errors.add("Thông báo: " + exception.getMessage());
+            if (!"COMPLETED".equals(settlement.getNotificationStatus())) {
+                try {
+                    notificationClient.notify(trip.getShipperId(), trip.getId(), settlement.getTier(), settlement.getLateMinutes(), "SHIPPER");
+                    notificationClient.notify(trip.getCarrierId(), trip.getId(), settlement.getTier(), settlement.getLateMinutes(), "CARRIER");
+                    settlement.setNotificationStatus("COMPLETED");
+                } catch (RuntimeException exception) {
+                    settlement.setNotificationStatus("FAILED");
+                    errors.add("Thông báo: " + exception.getMessage());
+                }
             }
         }
         boolean complete = "COMPLETED".equals(settlement.getWalletStatus())

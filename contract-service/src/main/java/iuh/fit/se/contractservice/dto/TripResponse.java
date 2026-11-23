@@ -36,6 +36,8 @@ public record TripResponse(
         long routeVersion,
         // V3.1: true once the assigned driver signed in (code session or legacy account); no IDs exposed.
         boolean driverConnected,
-        long assignmentVersion
+        long assignmentVersion,
+        String driverName,
+        String vehiclePlate
 ) {
 }

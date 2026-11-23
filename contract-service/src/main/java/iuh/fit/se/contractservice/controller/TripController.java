@@ -17,6 +17,7 @@ import iuh.fit.se.contractservice.dto.TripLocationResponse;
 import iuh.fit.se.contractservice.dto.CancelLateTripRequest;
 import iuh.fit.se.contractservice.dto.TripDelaySettlementResponse;
 import iuh.fit.se.contractservice.mapper.TripMapper;
+import iuh.fit.se.contractservice.service.TripFleetEnricher;
 import iuh.fit.se.contractservice.service.TripService;
 import iuh.fit.se.contractservice.service.TripClaimService;
 import iuh.fit.se.contractservice.dto.ClaimTripRequest;
@@ -43,6 +44,7 @@ public class TripController {
     private final TripService tripService;
     private final TripClaimService tripClaimService;
     private final TripMapper tripMapper;
+    private final TripFleetEnricher tripFleetEnricher;
 
     @org.springframework.web.bind.annotation.ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     public org.springframework.http.ResponseEntity<java.util.Map<String, Object>> businessError(
@@ -70,7 +72,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @RequestParam(required = false) TripStatus status
     ) {
-        return tripMapper.toResponses(tripService.list(accountId, parseRole(role), status));
+        return tripFleetEnricher.enrichTrips(tripMapper.toResponses(tripService.list(accountId, parseRole(role), status)));
     }
 
     @GetMapping("/{tripId}")
@@ -79,7 +81,7 @@ public class TripController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID tripId
     ) {
-        return tripMapper.toResponse(tripService.get(accountId, parseRole(role), tripId));
+        return tripFleetEnricher.enrichTrip(tripMapper.toResponse(tripService.get(accountId, parseRole(role), tripId)));
     }
 
     @PatchMapping("/{tripId}/status")

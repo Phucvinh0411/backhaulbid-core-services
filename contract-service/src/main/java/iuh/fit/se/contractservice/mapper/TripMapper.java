@@ -49,6 +49,8 @@ public interface TripMapper {
     @Mapping(target = "canCancelForLateDelivery", expression = "java(canCancelForLateDelivery(trip))")
     @Mapping(target = "latestTracking", expression = "java(toLatestTracking(trip))")
     @Mapping(target = "driverConnected", expression = "java(isDriverConnected(trip))")
+    @Mapping(target = "driverName", ignore = true)
+    @Mapping(target = "vehiclePlate", ignore = true)
     TripResponse toResponse(Trip trip);
 
     List<TripResponse> toResponses(List<Trip> trips);

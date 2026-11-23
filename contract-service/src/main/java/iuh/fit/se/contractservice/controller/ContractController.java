@@ -8,6 +8,7 @@ import iuh.fit.se.contractservice.dto.SignContractRequest;
 import iuh.fit.se.contractservice.mapper.ContractMapper;
 import iuh.fit.se.contractservice.service.ContractService;
 import iuh.fit.se.contractservice.service.IdentityVerificationClient;
+import iuh.fit.se.contractservice.service.TripFleetEnricher;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -37,6 +38,7 @@ public class ContractController {
     private final ContractService contractService;
     private final IdentityVerificationClient identityVerificationClient;
     private final ContractMapper contractMapper;
+    private final TripFleetEnricher tripFleetEnricher;
 
     @GetMapping("/mine")
     public List<ContractResponse> listMine(
@@ -45,7 +47,8 @@ public class ContractController {
             @RequestParam(required = false) ContractStatus status
     ) {
         AccountRole accountRole = parseRole(role);
-        return contractMapper.toResponses(contractService.list(accountId, accountRole, status));
+        return tripFleetEnricher.enrichContracts(
+                contractMapper.toResponses(contractService.list(accountId, accountRole, status)));
     }
 
     @GetMapping("/{contractId}")
@@ -54,7 +57,8 @@ public class ContractController {
             @RequestHeader("X-User-Role") String role,
             @PathVariable UUID contractId
     ) {
-        return contractMapper.toResponse(contractService.get(accountId, parseRole(role), contractId));
+        return tripFleetEnricher.enrichContract(
+                contractMapper.toResponse(contractService.get(accountId, parseRole(role), contractId)));
     }
 
     @PostMapping("/{contractId}/sign/otp")

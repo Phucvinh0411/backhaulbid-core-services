@@ -1,6 +1,5 @@
 package iuh.fit.se.contractservice.service;
 
-import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -15,15 +14,24 @@ import java.util.Map;
 import java.util.UUID;
 
 @Component
-@RequiredArgsConstructor
 public class LateDeliveryWalletClient {
     @Value("${WALLET_SERVICE_URL:http://wallet-service:8080}")
     private String walletServiceUrl;
 
-    @Value("${INTERNAL_SERVICE_TOKEN:}")
+    @Value("${INTERNAL_WALLET_TOKEN:${INTERNAL_SERVICE_TOKEN:}}")
     private String token;
 
-    private final RestTemplate restTemplate = createRestTemplate();
+    private final RestTemplate restTemplate;
+
+    public LateDeliveryWalletClient() {
+        this.restTemplate = createRestTemplate();
+    }
+
+    LateDeliveryWalletClient(RestTemplate restTemplate, String walletServiceUrl, String token) {
+        this.restTemplate = restTemplate;
+        this.walletServiceUrl = walletServiceUrl;
+        this.token = token;
+    }
 
     private static RestTemplate createRestTemplate() {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
