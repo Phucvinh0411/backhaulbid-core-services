@@ -13,6 +13,8 @@ import iuh.fit.se.contractservice.domain.enums.ContractStatus;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 import iuh.fit.se.contractservice.dto.ContractResponse;
 import iuh.fit.se.contractservice.dto.TripHandoverResponse;
+import iuh.fit.se.contractservice.dto.TripResponse;
+import jakarta.persistence.EntityManager;
 import iuh.fit.se.contractservice.mapper.ComplaintMapperImpl;
 import iuh.fit.se.contractservice.mapper.ContractMapper;
 import iuh.fit.se.contractservice.mapper.ContractMapperImpl;
@@ -74,6 +76,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class OpenInViewDisabledLazyFetchRegressionTest {
 
     @Autowired private TransactionTemplate tx;
+    @Autowired private EntityManager entityManager;
     @Autowired private TripRepository tripRepository;
     @Autowired private ContractRepository contractRepository;
     @Autowired private TripHandoverRepository tripHandoverRepository;
@@ -91,7 +94,7 @@ class OpenInViewDisabledLazyFetchRegressionTest {
         UUID vehicleId = UUID.randomUUID();
         Instant now = Instant.now();
 
-        UUID[] ids = new UUID[3]; // [tripId, contractId, complaintId]
+        UUID[] ids = new UUID[4]; // [tripId, contractId, complaintId, waitingTripId]
         tx.executeWithoutResult(status -> {
             Trip trip = Trip.builder()
                     .shipperId(shipperId)
@@ -155,13 +158,38 @@ class OpenInViewDisabledLazyFetchRegressionTest {
             ids[0] = savedTrip.getId();
             ids[1] = savedContract.getId();
             ids[2] = savedComplaint.getId();
+
+            Trip waitingTrip = tripRepository.saveAndFlush(Trip.builder()
+                    .shipperId(shipperId)
+                    .carrierId(carrierId)
+                    .vehicleId(vehicleId)
+                    .pickupLocation("Kho C")
+                    .deliveryLocation("Kho D")
+                    .agreedPrice(new BigDecimal("12000000.00"))
+                    .status(TripStatus.WAITING_PICKUP)
+                    .routeVersion(1L)
+                    .assignmentPinAttempts(0)
+                    .build());
+            contractRepository.saveAndFlush(Contract.builder()
+                    .trip(waitingTrip)
+                    .shipperId(shipperId)
+                    .carrierId(carrierId)
+                    .contractCode("HD-WAIT-" + waitingTrip.getId().toString().substring(0, 8))
+                    .status(ContractStatus.WAITING_SIGNATURE)
+                    .build());
+            ids[3] = waitingTrip.getId();
         });
 
         List<ContractResponse> contracts = contractMapper.toResponses(
                 contractService.list(shipperId, AccountRole.SHIPPER, null));
-        assertThat(contracts).hasSize(1);
-        assertThat(contracts.get(0).trip().latestTracking()).isNotNull();
-        assertThat(contracts.get(0).trip().latestTracking().status()).isEqualTo(TripStatus.IN_TRANSIT);
+        assertThat(contracts).hasSize(2);
+        ContractResponse inTransitContract = contracts.stream()
+                .filter(c -> c.id().equals(ids[1]))
+                .findFirst()
+                .orElseThrow();
+        assertThat(inTransitContract.trip().latestTracking()).isNotNull();
+        assertThat(inTransitContract.trip().latestTracking().status()).isEqualTo(TripStatus.IN_TRANSIT);
+        assertThat(inTransitContract.trip().contractStatus()).isEqualTo(ContractStatus.SIGNED);
 
         ContractResponse singleContract = contractMapper.toResponse(
                 contractService.get(shipperId, AccountRole.SHIPPER, ids[1]));
@@ -171,6 +199,15 @@ class OpenInViewDisabledLazyFetchRegressionTest {
                 tripHandoverService.view(shipperId, AccountRole.SHIPPER, ids[0]));
         assertThat(handovers).hasSize(1);
         assertThat(handovers.get(0).photoPaths()).hasSize(2);
+
+        Trip detachedWaitingTrip = tx.execute(status -> {
+            Trip t = entityManager.find(Trip.class, ids[3]);
+            t.getTrackingLogs().size();
+            if (t.getContract() != null) t.getContract().getStatus();
+            return t;
+        });
+        TripResponse routeUpdatedTrip = tripMapper.toResponse(detachedWaitingTrip);
+        assertThat(routeUpdatedTrip.contractStatus()).isEqualTo(ContractStatus.WAITING_SIGNATURE);
 
         SseEmitter emitter = complaintService.subscribe(shipperId, AccountRole.SHIPPER, ids[2]);
         assertThat(emitter).isNotNull();

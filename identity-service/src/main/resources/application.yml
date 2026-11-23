@@ -48,6 +48,22 @@ spring:
     baseline-version: 0
     validate-on-migrate: false
 
+  mail:
+    host: ${MAIL_HOST:}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:true}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS:true}
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
 eureka:
   client:
     enabled: ${EUREKA_ENABLED:true}
@@ -82,6 +98,13 @@ app:
     replay-key: ${DRIVER_REPLAY_KEY:}
   google:
     client-id: ${GOOGLE_CLIENT_ID:}
+  mail:
+    enabled: ${IDENTITY_EMAIL_OTP_ENABLED:true}
+    from: ${MAIL_FROM:no-reply@backhaulbid.vn}
+    from-name: ${MAIL_FROM_NAME:BackhaulBid}
+    otp-ttl-seconds: ${IDENTITY_EMAIL_OTP_TTL_SECONDS:600}
+    otp-resend-cooldown-seconds: ${IDENTITY_EMAIL_OTP_RESEND_COOLDOWN_SECONDS:60}
+    otp-max-attempts: ${IDENTITY_EMAIL_OTP_MAX_ATTEMPTS:5}
 
 management:
   endpoints:

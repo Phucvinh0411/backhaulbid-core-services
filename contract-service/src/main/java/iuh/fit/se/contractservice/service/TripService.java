@@ -108,6 +108,7 @@ public class TripService {
             lateDeliveryService.processTripAndReleaseIfClosed(saved);
         }
         saved.getTrackingLogs().size();
+        if (saved.getContract() != null) saved.getContract().getStatus();
         return saved;
     }
 
@@ -335,6 +336,7 @@ public class TripService {
         lateDeliveryService.releaseRemainingDepositIfClosed(cancelled);
         lateDeliveryService.notifyLateCancellation(cancelled);
         cancelled.getTrackingLogs().size();
+        if (cancelled.getContract() != null) cancelled.getContract().getStatus();
         return cancelled;
     }
 

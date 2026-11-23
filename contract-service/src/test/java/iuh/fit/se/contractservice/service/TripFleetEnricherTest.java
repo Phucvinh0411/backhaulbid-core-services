@@ -31,7 +31,7 @@ class TripFleetEnricherTest {
                 "auc-1", "bid-1", "HCM", "HN", new BigDecimal("10000000"),
                 Instant.now().plusSeconds(3600), null, null, null, false, 0, false,
                 TripStatus.IN_TRANSIT, null, Instant.now(), Instant.now(),
-                null, null, null, 1L, true, 1L, null, null);
+                null, null, null, 1L, true, 1L, null, null, ContractStatus.SIGNED);
     }
 
     @Test
@@ -56,10 +56,10 @@ class TripFleetEnricherTest {
 
         ContractResponse c1 = new ContractResponse(UUID.randomUUID(), trip1Id, shipperId, carrierId, "AUC-1",
                 null, null, ContractStatus.SIGNED, null, Instant.now(), Instant.now(),
-                sampleTrip(trip1Id, shipperId, carrierId, vehicleId, driverId), List.of());
+                sampleTrip(trip1Id, shipperId, carrierId, vehicleId, driverId), List.of(), null, null);
         ContractResponse c2 = new ContractResponse(UUID.randomUUID(), trip2Id, shipperId, carrierId, "AUC-2",
                 null, null, ContractStatus.SIGNED, null, Instant.now(), Instant.now(),
-                sampleTrip(trip2Id, shipperId, carrierId, vehicleId, driverId), List.of());
+                sampleTrip(trip2Id, shipperId, carrierId, vehicleId, driverId), List.of(), null, null);
 
         List<ContractResponse> enriched = enricher.enrichContracts(List.of(c1, c2));
         assertThat(enriched).hasSize(2);
@@ -86,5 +86,34 @@ class TripFleetEnricherTest {
         assertThat(result.driverName()).isNull();
         assertThat(result.vehiclePlate()).isNull();
         server.verify();
+    }
+
+    @Test
+    void enrichesContractsWithPartnerNamesOverIdentityClient() {
+        IdentityVerificationClient identityClient = new IdentityVerificationClient(
+                new RestTemplateBuilder(), "http://identity-service:8080", "secret");
+        RestTemplate identityRt = (RestTemplate) ReflectionTestUtils.getField(identityClient, "client");
+        MockRestServiceServer identityServer = MockRestServiceServer.createServer(identityRt);
+
+        UUID shipperId = UUID.randomUUID();
+        UUID carrierId = UUID.randomUUID();
+        identityServer.expect(requestTo("http://identity-service:8080/internal/accounts/" + shipperId + "/signing-contact"))
+                .andRespond(withSuccess("{\"email\":\"s@co.vn\",\"emailVerified\":true,\"fullName\":\"Nguyen A\",\"companyName\":\"Cong ty Sai Gon Xanh\"}", MediaType.APPLICATION_JSON));
+        identityServer.expect(requestTo("http://identity-service:8080/internal/accounts/" + carrierId + "/signing-contact"))
+                .andRespond(withSuccess("{\"email\":\"c@co.vn\",\"emailVerified\":true,\"fullName\":\"Tran B\",\"companyName\":\"Van tai Phuc An\"}", MediaType.APPLICATION_JSON));
+
+        TripFleetEnricher enricher = new TripFleetEnricher(
+                new RestTemplateBuilder(), "http://fleet-service:8080", identityClient);
+
+        UUID tripId = UUID.randomUUID();
+        ContractResponse c = new ContractResponse(UUID.randomUUID(), tripId, shipperId, carrierId, "AUC-3",
+                null, null, ContractStatus.WAITING_SIGNATURE, null, Instant.now(), Instant.now(),
+                sampleTrip(tripId, shipperId, carrierId, null, null), List.of(), null, null);
+
+        List<ContractResponse> enriched = enricher.enrichContracts(List.of(c));
+        assertThat(enriched).hasSize(1);
+        assertThat(enriched.get(0).shipperName()).isEqualTo("Cong ty Sai Gon Xanh");
+        assertThat(enriched.get(0).carrierName()).isEqualTo("Van tai Phuc An");
+        identityServer.verify();
     }
 }

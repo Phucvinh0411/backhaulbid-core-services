@@ -50,6 +50,7 @@ public class TripRoutePointService {
         trip.setRouteVersion(nextVersion);
         Trip saved = trips.save(trip);
         saved.getTrackingLogs().size();
+        if (saved.getContract() != null) saved.getContract().getStatus();
         return saved;
     }
 

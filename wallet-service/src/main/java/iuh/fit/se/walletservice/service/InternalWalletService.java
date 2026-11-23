@@ -142,9 +142,12 @@ public class InternalWalletService {
             }
             wallet.unfreeze(remaining);
             Transaction penalty = wallet.withdraw(remaining);
-            penalty.setType(TransactionType.PENALTY);
+            boolean auctionCreationFee = isAuctionCreationFee(hold, request);
+            penalty.setType(auctionCreationFee ? TransactionType.AUCTION_FEE : TransactionType.PENALTY);
             penalty.setReferenceCode(request.idempotencyKey());
-            penalty.setDescription("Forfeit auction deposit hold " + holdId);
+            penalty.setDescription(auctionCreationFee
+                    ? "Phí tạo phiên đấu giá #" + shortRef(request.idempotencyKey())
+                    : "Khấu trừ tiền đặt cọc phiên #" + shortRef(holdId));
             penalty.setIdempotencyKey(request.idempotencyKey());
             hold.setRemainingHoldAmount(BigDecimal.ZERO);
             walletRepository.saveAndFlush(wallet);
@@ -152,6 +155,21 @@ public class InternalWalletService {
         } catch (IllegalArgumentException | IllegalStateException exception) {
             throw failure(exception.getMessage());
         }
+    }
+
+    private static boolean isAuctionCreationFee(Transaction hold, InternalWalletReleaseRequest request) {
+        String key = request != null ? request.idempotencyKey() : null;
+        String ref = hold != null ? hold.getReferenceCode() : null;
+        return (key != null && key.startsWith("auction_creation_fee_"))
+                || (ref != null && ref.startsWith("auction_creation_fee_"));
+    }
+
+    private static String shortRef(Object value) {
+        if (value == null) return "";
+        String raw = value.toString()
+                .replaceFirst("^auction_creation_fee_", "")
+                .replaceAll(":.*$", "");
+        return raw.length() >= 8 ? raw.substring(0, 8).toUpperCase() : raw.toUpperCase();
     }
 
     /** Transfers a single incremental late-delivery penalty directly from the frozen deposit. */

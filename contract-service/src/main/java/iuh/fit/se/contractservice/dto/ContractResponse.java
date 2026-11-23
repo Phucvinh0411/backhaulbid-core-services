@@ -20,7 +20,9 @@ public record ContractResponse(
         Instant createdAt,
         Instant updatedAt,
         TripResponse trip,
-        List<SignatureResponse> signatures
+        List<SignatureResponse> signatures,
+        String shipperName,
+        String carrierName
 ) {
     public record SignatureResponse(
             UUID accountId,

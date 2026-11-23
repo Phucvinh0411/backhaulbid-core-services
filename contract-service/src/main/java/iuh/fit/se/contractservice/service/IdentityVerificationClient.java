@@ -14,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -26,7 +27,11 @@ public class IdentityVerificationClient {
     public record SigningContact(
             String email,
             boolean emailVerified,
-            String fullName) {
+            String fullName,
+            String companyName) {
+        public SigningContact(String email, boolean emailVerified, String fullName) {
+            this(email, emailVerified, fullName, null);
+        }
     }
 
     private final RestTemplate client;
@@ -71,7 +76,22 @@ public class IdentityVerificationClient {
         String email = body.get("email") instanceof String s && !s.isBlank() ? s.trim() : null;
         boolean emailVerified = Boolean.TRUE.equals(body.get("emailVerified"));
         String fullName = body.get("fullName") instanceof String s && !s.isBlank() ? s.trim() : null;
-        return new SigningContact(email, emailVerified, fullName);
+        String companyName = body.get("companyName") instanceof String s && !s.isBlank() ? s.trim() : null;
+        return new SigningContact(email, emailVerified, fullName, companyName);
+    }
+
+    /** Best-effort lookup of a partner's company/display name for contract list enrichment. */
+    public Optional<String> fetchPartnerName(UUID accountId) {
+        if (accountId == null || token == null || token.isBlank()) {
+            return Optional.empty();
+        }
+        try {
+            SigningContact contact = fetchSigningContact(accountId);
+            String preferred = contact.companyName() != null ? contact.companyName() : contact.fullName();
+            return Optional.ofNullable(preferred);
+        } catch (ResponseStatusException | RestClientException ignored) {
+            return Optional.empty();
+        }
     }
 
     private ResponseEntity<Map> exchangeInternal(String path, UUID accountId) {

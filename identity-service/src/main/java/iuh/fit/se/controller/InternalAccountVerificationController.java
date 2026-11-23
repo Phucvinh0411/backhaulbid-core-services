@@ -35,7 +35,11 @@ public class InternalAccountVerificationController {
     public record SigningContact(
             String email,
             boolean emailVerified,
-            String fullName) {
+            String fullName,
+            String companyName) {
+        public SigningContact(String email, boolean emailVerified, String fullName) {
+            this(email, emailVerified, fullName, null);
+        }
     }
 
     private final EkycVerificationRepository ekycRepository;
@@ -80,7 +84,10 @@ public class InternalAccountVerificationController {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Account not found"));
         String email = account.getEmail() == null || account.getEmail().isBlank() ? null : account.getEmail().trim();
         String fullName = account.getUserProfile() != null ? account.getUserProfile().getFullName() : null;
-        return new SigningContact(email, account.isEmailVerified(), fullName);
+        String companyName = companyRepository.findByAccount_Id(accountId)
+                .map(c -> c.getCompanyName() == null || c.getCompanyName().isBlank() ? null : c.getCompanyName().trim())
+                .orElse(null);
+        return new SigningContact(email, account.isEmailVerified(), fullName, companyName);
     }
 
     private void authorize(String token) {

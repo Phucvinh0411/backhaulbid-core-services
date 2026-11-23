@@ -1,5 +1,6 @@
 package iuh.fit.se.contractservice.dto;
 
+import iuh.fit.se.contractservice.domain.enums.ContractStatus;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 
 import java.math.BigDecimal;
@@ -38,6 +39,7 @@ public record TripResponse(
         boolean driverConnected,
         long assignmentVersion,
         String driverName,
-        String vehiclePlate
+        String vehiclePlate,
+        ContractStatus contractStatus
 ) {
 }

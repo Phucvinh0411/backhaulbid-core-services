@@ -23,5 +23,6 @@ public interface AccountRepository extends JpaRepository<Account, UUID> {
     Optional<Account> findByEmailIgnoreCase(String email);
     boolean existsByEmailIgnoreCase(String email);
     boolean existsByEmailIgnoreCaseAndIdNot(String email, UUID id);
+    @EntityGraph(attributePaths = {"userProfile", "company", "ekycVerification"})
     List<Account> findAllByOrderByCreatedAtDesc();
 }

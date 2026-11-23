@@ -60,7 +60,10 @@ class InternalAccountVerificationControllerTest {
     void returnsVerificationFlagsAndSigningContactWhenAuthorized() {
         UUID accountId = UUID.randomUUID();
         EkycVerification ekyc = EkycVerification.builder().status(VerificationStatus.VERIFIED).build();
-        Company company = Company.builder().verificationStatus(VerificationStatus.VERIFIED).build();
+        Company company = Company.builder()
+                .companyName("Cong ty ABC")
+                .verificationStatus(VerificationStatus.VERIFIED)
+                .build();
         Account account = Account.builder()
                 .id(accountId)
                 .email("  sign@company.vn  ")
@@ -81,5 +84,6 @@ class InternalAccountVerificationControllerTest {
         assertThat(contact.email()).isEqualTo("sign@company.vn");
         assertThat(contact.emailVerified()).isTrue();
         assertThat(contact.fullName()).isEqualTo("Le Van D");
+        assertThat(contact.companyName()).isEqualTo("Cong ty ABC");
     }
 }

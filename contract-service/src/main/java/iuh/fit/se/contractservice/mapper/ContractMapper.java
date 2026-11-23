@@ -18,6 +18,8 @@ public interface ContractMapper {
 
     @Mapping(target = "tripId", source = "trip.id")
     @Mapping(target = "signatures", expression = "java(toSignatureResponses(contract.getSignatures()))")
+    @Mapping(target = "shipperName", ignore = true)
+    @Mapping(target = "carrierName", ignore = true)
     ContractResponse toResponse(Contract contract);
 
     List<ContractResponse> toResponses(List<Contract> contracts);

@@ -10,6 +10,7 @@ import iuh.fit.se.contractservice.domain.entity.TripLocationUpdate;
 import iuh.fit.se.contractservice.domain.entity.TripReview;
 import iuh.fit.se.contractservice.domain.entity.TripRouteLocation;
 import iuh.fit.se.contractservice.domain.entity.TripTrackingSession;
+import iuh.fit.se.contractservice.domain.enums.ContractStatus;
 import iuh.fit.se.contractservice.domain.enums.TripStatus;
 import iuh.fit.se.contractservice.dto.CarrierReviewItemResponse;
 import iuh.fit.se.contractservice.dto.DeliveryProofResponse;
@@ -51,6 +52,7 @@ public interface TripMapper {
     @Mapping(target = "driverConnected", expression = "java(isDriverConnected(trip))")
     @Mapping(target = "driverName", ignore = true)
     @Mapping(target = "vehiclePlate", ignore = true)
+    @Mapping(target = "contractStatus", expression = "java(resolveContractStatus(trip))")
     TripResponse toResponse(Trip trip);
 
     List<TripResponse> toResponses(List<Trip> trips);
@@ -150,6 +152,10 @@ public interface TripMapper {
 
     default boolean isDriverConnected(Trip trip) {
         return trip.getDriverSessionId() != null || trip.getDriverAccountId() != null;
+    }
+
+    default ContractStatus resolveContractStatus(Trip trip) {
+        return trip != null && trip.getContract() != null ? trip.getContract().getStatus() : null;
     }
 
     default List<String> buildHandoverPhotoPaths(TripHandover handover) {

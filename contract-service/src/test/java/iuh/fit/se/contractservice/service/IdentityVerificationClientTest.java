@@ -42,7 +42,7 @@ class IdentityVerificationClientTest {
 
         server.expect(requestTo("http://identity-service:8080/internal/accounts/" + accountId + "/signing-contact"))
                 .andExpect(header("X-Internal-Token", "internal-secret"))
-                .andRespond(withSuccess("{\"email\":\"owner@carrier.vn\",\"emailVerified\":true,\"fullName\":\"Tran Van E\"}", MediaType.APPLICATION_JSON));
+                .andRespond(withSuccess("{\"email\":\"owner@carrier.vn\",\"emailVerified\":true,\"fullName\":\"Tran Van E\",\"companyName\":\"Cong ty Van Tai E\"}", MediaType.APPLICATION_JSON));
 
         assertThatCode(() -> client.assertVerified(accountId)).doesNotThrowAnyException();
         assertThatThrownBy(() -> client.assertVerified(accountId))
@@ -54,6 +54,7 @@ class IdentityVerificationClientTest {
         assertThat(contact.email()).isEqualTo("owner@carrier.vn");
         assertThat(contact.emailVerified()).isTrue();
         assertThat(contact.fullName()).isEqualTo("Tran Van E");
+        assertThat(contact.companyName()).isEqualTo("Cong ty Van Tai E");
 
         server.verify();
     }

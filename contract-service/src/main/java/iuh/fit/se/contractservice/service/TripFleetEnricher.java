@@ -3,6 +3,7 @@ package iuh.fit.se.contractservice.service;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import iuh.fit.se.contractservice.dto.ContractResponse;
 import iuh.fit.se.contractservice.dto.TripResponse;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.http.HttpEntity;
@@ -20,17 +21,26 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Enriches trip responses with vehicle license plate and assigned driver name via batched fleet-service lookups. */
+/** Enriches trip responses with fleet info and contract responses with partner business names. */
 @Component
 public class TripFleetEnricher {
     private final RestTemplate restTemplate;
     private final String fleetServiceUrl;
+    private final IdentityVerificationClient identityVerificationClient;
 
     public TripFleetEnricher(RestTemplateBuilder builder,
             @Value("${FLEET_SERVICE_URL:http://fleet-service:8080}") String fleetServiceUrl) {
+        this(builder, fleetServiceUrl, null);
+    }
+
+    @Autowired
+    public TripFleetEnricher(RestTemplateBuilder builder,
+            @Value("${FLEET_SERVICE_URL:http://fleet-service:8080}") String fleetServiceUrl,
+            IdentityVerificationClient identityVerificationClient) {
         this.restTemplate = builder.setConnectTimeout(Duration.ofSeconds(2))
                 .setReadTimeout(Duration.ofSeconds(3)).build();
         this.fleetServiceUrl = fleetServiceUrl.replaceAll("/+$", "");
+        this.identityVerificationClient = identityVerificationClient;
     }
 
     public TripResponse enrichTrip(TripResponse trip) {
@@ -57,19 +67,33 @@ public class TripFleetEnricher {
     }
 
     public ContractResponse enrichContract(ContractResponse contract) {
-        if (contract == null || contract.trip() == null) return contract;
+        if (contract == null) return null;
         return enrichContracts(List.of(contract)).get(0);
     }
 
     public List<ContractResponse> enrichContracts(List<ContractResponse> contracts) {
         if (contracts == null || contracts.isEmpty()) return contracts;
         List<TripResponse> trips = contracts.stream().map(ContractResponse::trip).filter(Objects::nonNull).toList();
-        if (trips.isEmpty()) return contracts;
         Map<UUID, TripResponse> enrichedById = new HashMap<>();
-        enrichTrips(trips).forEach(t -> enrichedById.put(t.id(), t));
+        if (!trips.isEmpty()) {
+            enrichTrips(trips).forEach(t -> enrichedById.put(t.id(), t));
+        }
+        Map<UUID, String> partnerNames = new HashMap<>();
+        if (identityVerificationClient != null) {
+            contracts.stream()
+                    .filter(Objects::nonNull)
+                    .flatMap(c -> java.util.stream.Stream.of(c.shipperId(), c.carrierId()))
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .forEach(accountId -> identityVerificationClient.fetchPartnerName(accountId)
+                            .ifPresent(name -> partnerNames.put(accountId, name)));
+        }
         return contracts.stream()
-                .map(contract -> contract.trip() == null ? contract
-                        : copyWithTrip(contract, enrichedById.getOrDefault(contract.trip().id(), contract.trip())))
+                .map(contract -> contract == null ? null : copyWithEnriched(
+                        contract,
+                        contract.trip() == null ? null : enrichedById.getOrDefault(contract.trip().id(), contract.trip()),
+                        contract.shipperName() != null ? contract.shipperName() : partnerNames.get(contract.shipperId()),
+                        contract.carrierName() != null ? contract.carrierName() : partnerNames.get(contract.carrierId())))
                 .toList();
     }
 
@@ -81,14 +105,20 @@ public class TripFleetEnricher {
                 trip.deliveredAt(), trip.depositAmount(), trip.depositReleasedAt(), trip.latePolicyEnabled(),
                 trip.lateMinutes(), trip.canCancelForLateDelivery(), trip.status(), trip.cancellationReason(),
                 trip.createdAt(), trip.updatedAt(), trip.latestTracking(), trip.pickupPoint(), trip.deliveryPoint(),
-                trip.routeVersion(), trip.driverConnected(), trip.assignmentVersion(), driverName, vehiclePlate);
+                trip.routeVersion(), trip.driverConnected(), trip.assignmentVersion(), driverName, vehiclePlate,
+                trip.contractStatus());
     }
 
-    private static ContractResponse copyWithTrip(ContractResponse contract, TripResponse trip) {
+    private static ContractResponse copyWithEnriched(
+            ContractResponse contract,
+            TripResponse trip,
+            String shipperName,
+            String carrierName) {
         return new ContractResponse(
                 contract.id(), contract.tripId(), contract.shipperId(), contract.carrierId(),
                 contract.contractCode(), contract.pdfUrl(), contract.pdfHashSha256(), contract.status(),
-                contract.signingDeadlineAt(), contract.createdAt(), contract.updatedAt(), trip, contract.signatures());
+                contract.signingDeadlineAt(), contract.createdAt(), contract.updatedAt(), trip, contract.signatures(),
+                shipperName, carrierName);
     }
 
     private void loadCarrierFleet(UUID carrierId, Map<UUID, String> driverNames, Map<UUID, String> vehiclePlates) {
