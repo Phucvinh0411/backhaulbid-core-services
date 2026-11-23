@@ -107,6 +107,7 @@ public class TripService {
         if (request.status() == TripStatus.CANCELLED || request.status() == TripStatus.COMPLETED) {
             lateDeliveryService.processTripAndReleaseIfClosed(saved);
         }
+        saved.getTrackingLogs().size();
         return saved;
     }
 
@@ -333,6 +334,7 @@ public class TripService {
         Trip cancelled = tripRepository.save(trip);
         lateDeliveryService.releaseRemainingDepositIfClosed(cancelled);
         lateDeliveryService.notifyLateCancellation(cancelled);
+        cancelled.getTrackingLogs().size();
         return cancelled;
     }
 

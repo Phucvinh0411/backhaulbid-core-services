@@ -32,9 +32,10 @@ public class LateDeliveryNotificationClient {
     }
 
     public void notify(UUID userId, UUID tripId, int tier, long lateMinutes, String role) {
+        String code = shortTripCode(tripId);
         String title = tier == 1 ? "Đơn hàng có nguy cơ giao trễ"
                 : tier == 2 ? "Đơn hàng đã giao trễ hơn 1 giờ" : "Đơn hàng đã giao trễ hơn 3 giờ";
-        String message = "Chuyến " + tripId + " trễ " + lateMinutes
+        String message = "Chuyến " + code + " trễ " + lateMinutes
                 + " phút. Mức bồi thường hiện tại là " + (tier == 1 ? "5%" : tier == 2 ? "50%" : "100%")
                 + " tiền đặt trước. " + ("SHIPPER".equals(role)
                 ? "Vui lòng bố trí người nhận hàng tại kho; chủ hàng có thể hủy chuyến khi trễ hơn 1 giờ."
@@ -44,7 +45,12 @@ public class LateDeliveryNotificationClient {
 
     public void notifyCancelled(UUID userId, UUID tripId) {
         send(userId, tripId, "late-cancel:" + tripId + ":user:" + userId,
-                "Chuyến hàng đã bị hủy do giao trễ", "Chủ hàng đã hủy chuyến " + tripId + " vì xe trễ hơn 1 giờ.");
+                "Chuyến hàng đã bị hủy do giao trễ", "Chủ hàng đã hủy chuyến " + shortTripCode(tripId) + " vì xe trễ hơn 1 giờ.");
+    }
+
+    static String shortTripCode(UUID tripId) {
+        if (tripId == null) return "#--------";
+        return "#" + tripId.toString().replace("-", "").substring(0, 8).toUpperCase();
     }
 
     private void send(UUID userId, UUID tripId, String dedupeKey, String title, String message) {

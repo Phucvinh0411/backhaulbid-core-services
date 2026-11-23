@@ -23,6 +23,7 @@ spring:
   # JPA Configuration
   # ──────────────────────────────────────────
   jpa:
+    open-in-view: false
     hibernate:
       ddl-auto: validate
     show-sql: ${SPRING_JPA_SHOW_SQL:false}

@@ -48,7 +48,9 @@ public class TripRoutePointService {
         trip.setPickupPoint(pinned(previousPickup, trip.getPickupLocation(), request.pickupPoint()));
         trip.setDeliveryPoint(pinned(previousDelivery, trip.getDeliveryLocation(), request.deliveryPoint()));
         trip.setRouteVersion(nextVersion);
-        return trips.save(trip);
+        Trip saved = trips.save(trip);
+        saved.getTrackingLogs().size();
+        return saved;
     }
 
     private TripRouteLocation pinned(TripRouteLocation original, String signedLocation, TripRoutePoint point) {

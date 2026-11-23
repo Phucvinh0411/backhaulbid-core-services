@@ -118,6 +118,9 @@ public class ContractService {
             contract.setSigningDeadlineAt(now.plus(Duration.ofHours(24)));
         }
         Contract saved = contractRepository.save(contract);
+        if (saved.getSignatures() != null) {
+            saved.getSignatures().size();
+        }
         if (auctionAwardContract) {
             awardEventPublisher.publishAfterCommit(
                     contract.getTrip().getAwardAttemptId(),
