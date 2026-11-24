@@ -3,6 +3,7 @@ package iuh.fit.se.walletservice.config;
 import iuh.fit.se.walletservice.dto.response.ApiErrorResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.orm.ObjectOptimisticLockingFailureException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -20,6 +21,14 @@ public class WalletExceptionHandler {
                 "WALLET_" + status.value(),
                 exception.getReason() == null ? status.getReasonPhrase() : exception.getReason(),
                 Map.of("status", status.value()))));
+    }
+
+    @ExceptionHandler(ObjectOptimisticLockingFailureException.class)
+    public ResponseEntity<ApiErrorResponse> handleOptimisticLock(ObjectOptimisticLockingFailureException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(new ApiErrorResponse(new ApiErrorResponse.ErrorBody(
+                "WALLET_409",
+                "Ví vừa có giao dịch khác cập nhật. Vui lòng thử lại.",
+                Map.of("status", HttpStatus.CONFLICT.value()))));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

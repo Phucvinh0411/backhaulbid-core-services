@@ -88,7 +88,7 @@ class WalletTransactionLabelingTest {
                 .build();
 
         when(withdrawalRepository.findByIdForUpdate(withdrawalId)).thenReturn(request);
-        when(walletRepository.findByAccountId(accountId)).thenReturn(Optional.of(wallet));
+        when(walletRepository.findByAccountIdForUpdate(accountId)).thenReturn(Optional.of(wallet));
         when(withdrawalRepository.save(any())).thenReturn(request);
 
         WithdrawalService service = new WithdrawalService(withdrawalRepository, walletRepository, withdrawalMapper);
@@ -98,5 +98,43 @@ class WalletTransactionLabelingTest {
         assertThat(release.getType()).isEqualTo(TransactionType.UNFREEZE);
         assertThat(release.getReferenceCode()).isEqualTo("WITHDRAWAL_RELEASE:" + withdrawalId);
         assertThat(release.getDescription()).contains("#12345678");
+    }
+
+    @Test
+    void approveWithdrawalSetsWithdrawalReleaseReferenceAndDescriptionBeforePayout() {
+        UUID accountId = UUID.randomUUID();
+        UUID withdrawalId = UUID.fromString("abcdef12-aaaa-bbbb-cccc-111122223333");
+        Wallet wallet = Wallet.builder()
+                .id(UUID.randomUUID())
+                .accountId(accountId)
+                .balance(new BigDecimal("1000000.00"))
+                .frozenBalance(BigDecimal.ZERO)
+                .build();
+        wallet.freeze(new BigDecimal("500000.00"));
+
+        WithdrawalRequest request = WithdrawalRequest.builder()
+                .id(withdrawalId)
+                .accountId(accountId)
+                .amount(new BigDecimal("500000.00"))
+                .bankName("BIDV")
+                .bankAccountNumber("1234567890")
+                .accountHolderName("TRAN VAN PHUC")
+                .status(WithdrawalStatus.PENDING)
+                .build();
+
+        when(withdrawalRepository.findByIdForUpdate(withdrawalId)).thenReturn(request);
+        when(walletRepository.findByAccountIdForUpdate(accountId)).thenReturn(Optional.of(wallet));
+        when(withdrawalRepository.save(any())).thenReturn(request);
+
+        WithdrawalService service = new WithdrawalService(withdrawalRepository, walletRepository, withdrawalMapper);
+        service.approve(withdrawalId, UUID.randomUUID());
+
+        Transaction release = wallet.getTransactions().get(wallet.getTransactions().size() - 2);
+        Transaction payout = wallet.getTransactions().get(wallet.getTransactions().size() - 1);
+        assertThat(release.getType()).isEqualTo(TransactionType.UNFREEZE);
+        assertThat(release.getReferenceCode()).isEqualTo("WITHDRAWAL_RELEASE:" + withdrawalId);
+        assertThat(release.getDescription()).isEqualTo("Giải phóng tạm giữ chi trả yêu cầu rút tiền #ABCDEF12");
+        assertThat(payout.getType()).isEqualTo(TransactionType.WITHDRAW);
+        assertThat(payout.getReferenceCode()).isEqualTo("WITHDRAWAL:" + withdrawalId);
     }
 }

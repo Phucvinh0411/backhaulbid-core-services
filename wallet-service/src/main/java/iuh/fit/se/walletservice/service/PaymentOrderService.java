@@ -159,8 +159,9 @@ public class PaymentOrderService {
             throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY, "Payment amount does not match order");
         }
 
-        Wallet wallet = walletRepository.findByAccountId(order.getAccountId())
-                .orElseGet(() -> Wallet.builder().accountId(order.getAccountId()).build());
+        walletRepository.ensureExistsByAccountId(order.getAccountId());
+        Wallet wallet = walletRepository.findByAccountIdForUpdate(order.getAccountId())
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet not found"));
         Transaction transaction = wallet.deposit(providerAmount);
         transaction.setPaymentMethod(PaymentMethod.BANK_TRANSFER);
         transaction.setReferenceCode("SEPAY:" + providerTransactionId);

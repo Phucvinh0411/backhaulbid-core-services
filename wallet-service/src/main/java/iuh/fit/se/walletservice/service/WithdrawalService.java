@@ -80,9 +80,11 @@ public class WithdrawalService {
     @Transactional
     public WithdrawalResponse approve(UUID withdrawalId, UUID adminId) {
         WithdrawalRequest withdrawal = pendingRequest(withdrawalId);
-        Wallet wallet = wallet(withdrawal.getAccountId());
+        Wallet wallet = walletForUpdate(withdrawal.getAccountId());
 
-        wallet.unfreeze(withdrawal.getAmount());
+        Transaction release = wallet.unfreeze(withdrawal.getAmount());
+        release.setReferenceCode("WITHDRAWAL_RELEASE:" + withdrawal.getId());
+        release.setDescription("Giải phóng tạm giữ chi trả yêu cầu rút tiền #" + shortId(withdrawal.getId()));
         Transaction payout = wallet.withdraw(withdrawal.getAmount());
         payout.setType(TransactionType.WITHDRAW);
         payout.setReferenceCode("WITHDRAWAL:" + withdrawal.getId());
@@ -98,7 +100,7 @@ public class WithdrawalService {
     @Transactional
     public WithdrawalResponse reject(UUID withdrawalId, UUID adminId, WithdrawalDecisionRequest decision) {
         WithdrawalRequest withdrawal = pendingRequest(withdrawalId);
-        Wallet wallet = wallet(withdrawal.getAccountId());
+        Wallet wallet = walletForUpdate(withdrawal.getAccountId());
         Transaction release = wallet.unfreeze(withdrawal.getAmount());
         release.setReferenceCode("WITHDRAWAL_RELEASE:" + withdrawal.getId());
         release.setDescription("Hoàn tiền do từ chối yêu cầu rút #" + shortId(withdrawal.getId()));
@@ -122,8 +124,8 @@ public class WithdrawalService {
         return withdrawal;
     }
 
-    private Wallet wallet(UUID accountId) {
-        return walletRepository.findByAccountId(accountId)
+    private Wallet walletForUpdate(UUID accountId) {
+        return walletRepository.findByAccountIdForUpdate(accountId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Wallet not found"));
     }
 

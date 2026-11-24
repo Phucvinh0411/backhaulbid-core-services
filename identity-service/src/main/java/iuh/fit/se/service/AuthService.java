@@ -46,13 +46,13 @@ public class AuthService {
                 AccountRole.CARRIER, AccountRole.DRIVER).contains(request.getRole()))
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Public registration requires SHIPPER, CARRIER or DRIVER");
         if (accountRepository.existsByPhone(request.getPhone())) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Phone number already exists");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Số điện thoại này đã được đăng ký");
         }
         String email = request.getEmail() == null || request.getEmail().isBlank()
                 ? null
                 : request.getEmail().trim().toLowerCase(Locale.ROOT);
         if (email != null && accountRepository.existsByEmailIgnoreCase(email)) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email already exists");
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Email này đã được sử dụng");
         }
 
         Account account = Account.builder()
