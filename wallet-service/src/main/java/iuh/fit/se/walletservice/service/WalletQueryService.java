@@ -8,9 +8,11 @@ import iuh.fit.se.walletservice.dto.response.WalletTransactionResponse;
 import iuh.fit.se.walletservice.dto.response.AdminWalletSummaryResponse;
 import iuh.fit.se.walletservice.domain.enums.TransactionStatus;
 import iuh.fit.se.walletservice.domain.enums.TransactionType;
+import iuh.fit.se.walletservice.domain.enums.WithdrawalStatus;
 import iuh.fit.se.walletservice.mapper.WalletMapper;
 import iuh.fit.se.walletservice.repository.TransactionRepository;
 import iuh.fit.se.walletservice.repository.WalletRepository;
+import iuh.fit.se.walletservice.repository.WithdrawalRequestRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -26,14 +28,17 @@ import java.util.UUID;
 public class WalletQueryService {
     private final WalletRepository walletRepository;
     private final TransactionRepository transactionRepository;
+    private final WithdrawalRequestRepository withdrawalRequestRepository;
     private final WalletMapper walletMapper;
 
     public WalletQueryService(
             WalletRepository walletRepository,
             TransactionRepository transactionRepository,
+            WithdrawalRequestRepository withdrawalRequestRepository,
             WalletMapper walletMapper) {
         this.walletRepository = walletRepository;
         this.transactionRepository = transactionRepository;
+        this.withdrawalRequestRepository = withdrawalRequestRepository;
         this.walletMapper = walletMapper;
     }
 
@@ -81,7 +86,8 @@ public class WalletQueryService {
                 transactionRepository.sumByStatusAndType(TransactionStatus.SUCCESS, TransactionType.AUCTION_FEE),
                 transactionRepository.sumByStatusAndType(TransactionStatus.SUCCESS, TransactionType.DEPOSIT),
                 transactionRepository.sumByStatusAndType(TransactionStatus.SUCCESS, TransactionType.WITHDRAW),
-                transactionRepository.countByStatus(TransactionStatus.SUCCESS));
+                transactionRepository.countByStatus(TransactionStatus.SUCCESS),
+                withdrawalRequestRepository.countByStatus(WithdrawalStatus.PENDING));
     }
 
     private Wallet wallet(UUID accountId) {

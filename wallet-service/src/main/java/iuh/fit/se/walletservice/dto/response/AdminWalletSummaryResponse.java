@@ -6,5 +6,6 @@ public record AdminWalletSummaryResponse(
         BigDecimal auctionFees,
         BigDecimal deposits,
         BigDecimal withdrawals,
-        long successfulTransactions
+        long successfulTransactions,
+        long pendingWithdrawalsCount
 ) {}
