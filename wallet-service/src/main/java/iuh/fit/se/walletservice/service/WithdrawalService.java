@@ -71,10 +71,10 @@ public class WithdrawalService {
 
     @Transactional(readOnly = true)
     public WithdrawalPageResponse pending(String status, int page, int pageSize) {
-        WithdrawalStatus filter = status == null || status.isBlank()
-                ? WithdrawalStatus.PENDING
-                : parseStatus(status);
-        return page(withdrawalRepository.findByStatus(filter, pageable(page, pageSize)), page, pageSize);
+        if (status == null || status.isBlank() || "ALL".equalsIgnoreCase(status.trim())) {
+            return page(withdrawalRepository.findAll(pageable(page, pageSize)), page, pageSize);
+        }
+        return page(withdrawalRepository.findByStatus(parseStatus(status), pageable(page, pageSize)), page, pageSize);
     }
 
     @Transactional
@@ -147,7 +147,7 @@ public class WithdrawalService {
 
     private WithdrawalStatus parseStatus(String status) {
         try {
-            return WithdrawalStatus.valueOf(status.toUpperCase());
+            return WithdrawalStatus.valueOf(status.trim().toUpperCase());
         } catch (IllegalArgumentException exception) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid withdrawal status");
         }
